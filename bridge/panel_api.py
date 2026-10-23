@@ -12,7 +12,7 @@ from flask import Blueprint, Response, current_app, jsonify, redirect, request, 
 
 from bridge import __version__
 from bridge.backends import Target
-from bridge.config import TEST_DELAYS, TEST_RESPONSES
+from bridge.config import TEST_DELAYS, TEST_RESPONSES, UPDATE_MODES
 from bridge.errors import BridgeError
 from bridge.escpos import looks_like_zpl, render_escpos
 from bridge.samples import SAMPLES, test_ticket
@@ -204,6 +204,12 @@ def _attention(ctx, printers: list[dict]) -> list[dict]:
                           "detail": "Pasaron 2 horas en cola sin que volviera la impresora. Avisa a cocina.",
                           "link": "/panel#cola"})
     s = ctx.settings
+    updater = getattr(ctx, "updater", None)
+    if updater is not None and updater.state()["available"]:
+        state = updater.state()
+        when = "esta madrugada" if state["mode"] == "auto" else "cuando TI la instale"
+        items.append({"level": "warn", "title": f"Versión nueva disponible ({state['latest']})",
+                      "detail": f"Tienes la {state['current']}. Se instala {when}.", "link": "/panel/configuracion#actualizacion"})
     if s.test_mode:
         items.append({"level": "test", "title": "Modo prueba encendido",
                       "detail": "Nada se imprime en papel ni abre el cajón.", "link": "/panel/prueba"})
@@ -225,7 +231,7 @@ def _public_settings(s) -> dict:
         "test_mode": s.test_mode, "test_response": s.test_response, "test_delay_s": s.test_delay_s,
         "remote_panel_enabled": s.remote_panel_enabled, "remote_panel_port": s.remote_panel_port,
         "remote_user": s.remote_user, "remote_password_set": bool(s.remote_password_hash),
-        "remote_networks": s.remote_networks,
+        "remote_networks": s.remote_networks, "update_mode": s.update_mode,
     }
 
 
@@ -299,6 +305,10 @@ def _apply_settings(s, body: dict) -> list[str]:
         if body["test_response"] not in TEST_RESPONSES:
             raise BridgeError("Respuesta simulada desconocida.", 400)
         set_("test_response", body["test_response"])
+    if "update_mode" in body:
+        if body["update_mode"] not in UPDATE_MODES:
+            raise BridgeError("Modo de actualización inválido.", 400)
+        set_("update_mode", body["update_mode"])
     if "test_delay_s" in body:
         if body["test_delay_s"] not in TEST_DELAYS:
             raise BridgeError("Demora simulada inválida.", 400)

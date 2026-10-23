@@ -28,6 +28,7 @@ DEFAULT_ORIGINS = [
 ]
 TEST_RESPONSES = ("ok", "no_paper", "offline", "timeout", "one_in_three")
 TEST_DELAYS = (0, 1, 5, 20)
+UPDATE_MODES = ("auto", "notify", "off")
 
 
 def data_dir() -> Path:
@@ -78,6 +79,7 @@ class Settings:
     remote_password_hash: str = ""
     remote_networks: list[str] = field(default_factory=list)
     session_secret: str = ""
+    update_mode: str = "auto"
     installer_seed_applied: bool = False
 
 
@@ -97,6 +99,8 @@ def _sanitize(s: Settings) -> Settings:
         s.default_paper_width_mm = default.default_paper_width_mm
     if s.test_response not in TEST_RESPONSES:
         s.test_response = default.test_response
+    if s.update_mode not in UPDATE_MODES:
+        s.update_mode = default.update_mode
     if s.test_delay_s not in TEST_DELAYS:
         s.test_delay_s = default.test_delay_s
     if not isinstance(s.allowed_origins, list) or not all(isinstance(o, str) for o in s.allowed_origins):

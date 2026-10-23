@@ -514,6 +514,7 @@
       $("#s-rpass-state").textContent = s.remote_password_set ? "Hay una clave guardada. Escribe una nueva solo si quieres cambiarla." : "Aún no hay clave.";
       $("#s-networks").value = s.remote_networks.join(", ");
       $("#s-retention").value = s.retention_days;
+      $("#s-update").value = s.update_mode;
       $("#s-store").checked = s.store_payload;
       $("#s-store-img").checked = s.store_images;
     };
@@ -542,6 +543,7 @@
         remote_panel_enabled: $("#s-remote").checked, remote_panel_port: Number($("#s-remote-port").value),
         remote_networks: $("#s-networks").value.split(",").map((v) => v.trim()).filter(Boolean),
         retention_days: Number($("#s-retention").value), store_payload: $("#s-store").checked, store_images: $("#s-store-img").checked,
+        update_mode: $("#s-update").value,
       };
       if (body.port !== current.port && !(await confirmDialog("¿Cambiar el puerto?", `El POS dejará de encontrar el puente hasta que actualices la URL en Odoo a http://127.0.0.1:${body.port}.`, "Cambiar"))) return;
       const data = await busy(document.querySelector('button[form="settings-form"]'), () => api("/panel/api/settings", { method: "POST", body }));

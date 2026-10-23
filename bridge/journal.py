@@ -229,6 +229,13 @@ class Journal:
         )
         return {r["target_label"]: r["n"] for r in rows}
 
+    def activity_since(self, minutes: int) -> int:
+        """Impresiones y cajones en los últimos minutos (para no actualizar en plena operación)."""
+        since = (self.clock() - timedelta(minutes=minutes)).astimezone().isoformat(timespec="milliseconds")
+        rows = self._read("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND kind IN ('print', 'cashbox', 'queue')",
+                          (since,))
+        return rows[0]["n"] if rows else 0
+
     def last_rejected(self) -> dict | None:
         rows = self._read(
             "SELECT ts, origin, message FROM events WHERE result = 'rejected' ORDER BY ts DESC LIMIT 1")

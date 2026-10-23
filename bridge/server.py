@@ -32,6 +32,7 @@ class AppContext:
     real: Backend
     virtual: VirtualBackend
     outbox: Outbox | None = None
+    updater: object | None = None
     monitor: object | None = None
     runner: object | None = None
     csrf_token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
