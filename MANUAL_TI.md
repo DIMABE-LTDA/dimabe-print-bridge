@@ -1,0 +1,93 @@
+# Manual de TI · Dimabe Print Bridge
+
+## 1. Instalar en una caja
+
+1. En la caja, abre el POS de Odoo › menú de operaciones › **Diagnóstico de
+   impresión** › **Descargar Print Bridge**. También está en Odoo › Punto de
+   venta › Configuración › (el POS) › «Puente de impresión Dimabe» ›
+   *Descargar Print Bridge*.
+2. Ejecuta el instalador **como administrador**. Si Windows muestra «Windows
+   protegió su PC», elige *Más información › Ejecutar de todas formas* (pasa con
+   cualquier instalador nuevo descargado).
+3. En el asistente, deja marcadas:
+   - *Iniciar al encender sesión en Windows*.
+   - *Detener y reemplazar el puente anterior* (aparece si estaba el script de
+     PowerShell).
+   - *Confiar en el certificado de Dimabe Ltda* (desde ahí Windows muestra a
+     Dimabe Ltda como editor verificado y deja de advertir en las actualizaciones).
+4. Puerto: `3210` (debe coincidir con la «URL del puente» de Odoo). Clave API:
+   la misma configurada en el POS, si se usa.
+5. Al terminar aparece el ícono verde junto al reloj.
+
+Para actualizar: descarga e instala encima; la configuración y la bitácora se
+conservan.
+
+## 2. El ícono de la bandeja
+
+| Color | Significa |
+|---|---|
+| Verde | En línea |
+| Ámbar | Alguna impresora tuvo errores en los últimos 30 minutos |
+| Morado | Modo prueba: nada sale en papel |
+| Gris | No pudo abrir el puerto 3210 (otro programa lo usa; avisa cuál) |
+
+Menú: abrir panel, imprimir ticket de prueba, modo prueba, carpeta de bitácora,
+reiniciar, salir.
+
+## 3. El panel (`http://127.0.0.1:3210/panel`)
+
+- **Estado**: si el puente atiende al POS, trabajos de hoy, impresoras con su
+  estado, trabajos por hora y lo que requiere atención.
+- **Impresoras**: las de Windows y las de red que usó el POS. Botones para probar
+  estado, texto, conexión y cajón. Permite probar una IP que no aparece.
+- **Bitácora**: un registro por petición. Filtra por día, resultado, impresora y
+  documento; al elegir uno se ven los bytes enviados, la vista del ticket y el
+  botón para **reenviar** (solo si cocina confirma que no salió). Exporta CSV.
+- **Modo prueba**: ver abajo.
+- **Configuración**: puerto, ancho de papel, clave API, sitios permitidos, puertos
+  de red, panel desde la red y días de bitácora.
+
+## 4. Modo prueba (sin impresoras)
+
+Al encenderlo (panel o bandeja), todo lo que manda el POS se guarda en vez de
+imprimirse y el cajón no se abre. En **Modo prueba** se ve cada trabajo como
+habría salido (ESC/POS dibujado, ZPL como texto, imagen del recibo). Se puede
+simular *sin papel*, *desconectada*, *tiempo de espera* o *falla 1 de cada 3*, con
+demora, para ver cómo reacciona el POS. «Prueba sin POS» manda una boleta, una
+comanda o una etiqueta de ejemplo. **Apágalo antes de dejar la caja operando.**
+
+## 5. Panel desde otra PC
+
+Configuración › Acceso al panel: define usuario y clave (8+ caracteres), las redes
+que pueden entrar (por ejemplo `192.168.1.0/24`) y enciende «Abrir panel a la red».
+Se entra por `http://<IP de la caja>:3211/panel`. Desde la red solo se ve y se
+prueba: el POS sigue imprimiendo solo desde la misma caja. Si el panel avisa que
+falta permiso de firewall, ejecuta como administrador el comando que muestra.
+Tras 5 claves incorrectas, esa IP queda bloqueada 10 minutos.
+
+## 6. Problemas frecuentes
+
+| Síntoma | Qué revisar |
+|---|---|
+| El POS dice que no hay conexión con el puente | ¿Ícono en la bandeja? ¿Gris? Mira qué programa usa el 3210 (el ícono lo avisa) y ciérralo. |
+| Panel: «Origin not allowed» en Bitácora › Rechazados | El POS se abre desde un dominio no permitido: agrégalo en Configuración › Sitios permitidos. |
+| Impresora de red «No responde» | Encendida, cable, IP igual a la de Odoo (hoja de configuración con FEED al encender). |
+| USB «Pausada / Sin conexión en Windows» | Configuración de Windows › Impresoras › reanudar o poner en línea. |
+| Comanda impresa dos veces | Bitácora: si figura «Repetido», el puente evitó el duplicado; si no, revisar reintentos en el POS. |
+
+Logs de texto: `C:\ProgramData\DimabePrintBridge\logs\bridge.log`.
+
+## 7. Lista de chequeo con hardware real
+
+Antes de dar por buena una caja (o una versión nueva), en una caja con BIXOLON y Zebra:
+
+- [ ] Instalador desde Odoo, con certificado: sin advertencia de editor desconocido.
+- [ ] Boleta por USB (BIXOLON): sale completa, sin cortar el borde derecho, nítida.
+- [ ] Comanda por red: sale en la impresora de su categoría.
+- [ ] Cajón abre al cobrar en efectivo.
+- [ ] Etiqueta ZPL (Zebra) desde inventario.
+- [ ] Impresora de red apagada: el POS muestra error claro y la bitácora lo registra; al encenderla, reintentar imprime una sola vez.
+- [ ] Cola de Windows pausada: el POS recibe «está pausada en Windows», no un falso éxito.
+- [ ] Modo prueba: nada sale en papel; al apagarlo vuelve a imprimir.
+- [ ] Reiniciar Windows: el puente arranca solo al iniciar sesión.
+- [ ] Panel desde otra PC con usuario y clave.
