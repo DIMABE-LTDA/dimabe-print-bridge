@@ -7,7 +7,11 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 $py = Join-Path $root ".venv\Scripts\python.exe"
-if (-not (Test-Path $py)) { throw "Falta el entorno virtual: py -3.12 -m venv .venv; .venv\Scripts\pip install -r requirements-dev.txt" }
+if (-not (Test-Path $py)) {
+    # En GitHub Actions no hay .venv: se usa el Python del runner.
+    $py = (Get-Command python -ErrorAction SilentlyContinue).Source
+    if (-not $py) { throw "Falta Python: py -3.12 -m venv .venv; .venv\Scripts\pip install -r requirements-dev.txt" }
+}
 
 $version = (Select-String -Path "bridge\__init__.py" -Pattern '__version__ = "([^"]+)"').Matches[0].Groups[1].Value
 Write-Host "==> Dimabe Print Bridge $version" -ForegroundColor Cyan
