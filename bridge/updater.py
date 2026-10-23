@@ -79,7 +79,10 @@ def verify_signature(path: Path) -> tuple[str | None, str]:
     # La ruta va por variable de entorno: con -Command, PowerShell no la entrega en $args.
     script = ("$s = Get-AuthenticodeSignature -LiteralPath $env:DIMABE_VERIFY_PATH; "
               "@{thumb=$s.SignerCertificate.Thumbprint; status=[string]$s.Status} | ConvertTo-Json -Compress")
-    env = {**os.environ, "DIMABE_VERIFY_PATH": str(path)}
+    # Si el proceso nació de PowerShell 7, su PSModulePath impide a powershell.exe (5.1)
+    # cargar Microsoft.PowerShell.Security. En Windows la clave puede venir en mayúsculas.
+    env = {k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"}
+    env["DIMABE_VERIFY_PATH"] = str(path)
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True,
                              text=True, timeout=60, env=env, creationflags=NO_WINDOW).stdout
