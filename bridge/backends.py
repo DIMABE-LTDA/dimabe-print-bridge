@@ -141,11 +141,16 @@ class WindowsBackend:
 
     def _send_network(self, target: Target, data: bytes) -> None:
         try:
-            with self.connect((target.ip, target.port), timeout=CONNECT_TIMEOUT_S) as sock:
+            sock = self.connect((target.ip, target.port), timeout=CONNECT_TIMEOUT_S)
+        except OSError as exc:
+            # Nada llegó a la impresora: el POS puede reintentar sin duplicar.
+            raise BridgeError(f"No hubo conexión con {target.label}: {exc}", 500, code="printer_unreachable") from exc
+        try:
+            with sock:
                 sock.settimeout(WRITE_TIMEOUT_S)
                 sock.sendall(data)
         except OSError as exc:
-            raise BridgeError(f"No hubo conexión con {target.label}: {exc}", 500) from exc
+            raise BridgeError(f"Se cortó el envío a {target.label}: {exc}", 500) from exc
 
     def open_cashbox(self, target: Target) -> None:
         self.send_raw(target, CASH_DRAWER_PULSE, "Dimabe Cash Drawer")

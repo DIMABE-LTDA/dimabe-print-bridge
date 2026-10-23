@@ -15,6 +15,10 @@ from bridge.journal import Journal
 from bridge.security import validate_network_target
 
 DEDUPE_SECONDS = 300
+LOCK_TIMEOUT_S = 10
+# Más grande que esto no se guarda en la bitácora (una boleta rasterizada pesa ~200 KB).
+MAX_STORED_PAYLOAD = 64 * 1024
+MAX_STORED_PAYLOAD_TEST = 2 * 1024 * 1024
 _HEX_JUNK = re.compile(r"[^0-9A-Fa-f]")
 
 
@@ -42,15 +46,18 @@ def _filled(payload: dict, key: str) -> str:
 
 class PrintService:
     def __init__(self, settings_provider: Callable[[], Settings], real: Backend, virtual: Backend,
-                 journal: Journal, clock: Callable[[], float] = time.monotonic):
+                 journal: Journal, clock: Callable[[], float] = time.monotonic,
+                 lock_timeout: float = LOCK_TIMEOUT_S):
         self.settings_provider = settings_provider
+        self.lock_timeout = lock_timeout
         self.real = real
         self.virtual = virtual
         self.journal = journal
         self.clock = clock
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
-        self._done_jobs: dict[str, float] = {}
+        self._done_jobs: dict[tuple, float] = {}
+        self._in_flight: set[tuple] = set()
         self._jobs_guard = threading.Lock()
 
     # -- destino -------------------------------------------------------
@@ -65,30 +72,52 @@ class PrintService:
             return Target(kind="ip", ip=ip, port=port)
         name = _filled(payload, "printer_name")
         if name:
-            return Target(kind="usb", printer_name=name.strip())
+            name = name.strip()
+            if name.startswith("\\\\") or name.startswith("//"):
+                # Una ruta UNC haría que Windows se conecte por SMB a cualquier equipo
+                # con las credenciales del usuario: solo si ya está instalada.
+                try:
+                    installed = {p.get("Name") for p in self.real.list_printers()}
+                except Exception:  # noqa: BLE001
+                    installed = set()
+                if name not in installed:
+                    raise BridgeError("Esa impresora compartida no está instalada en este equipo.", 400)
+            return Target(kind="usb", printer_name=name)
         raise BridgeError("A printer target is required (printer_name for USB or ip_address for network).", 400)
 
     def _lock_for(self, label: str) -> threading.Lock:
         with self._locks_guard:
             return self._locks.setdefault(label, threading.Lock())
 
+    def is_busy(self, label: str) -> bool:
+        with self._locks_guard:
+            lock = self._locks.get(label)
+        return bool(lock and lock.locked())
+
     def _backend(self, settings: Settings) -> Backend:
         return self.virtual if settings.test_mode else self.real
 
     # -- dedupe --------------------------------------------------------
-    def _seen(self, job_id: str) -> bool:
-        if not job_id:
-            return False
+    def _claim(self, key: tuple | None) -> bool:
+        """Reserva el trabajo; False si ya se imprimió o se está imprimiendo."""
+        if key is None:
+            return True
         now = self.clock()
         with self._jobs_guard:
-            for key in [k for k, t in self._done_jobs.items() if now - t > DEDUPE_SECONDS]:
-                del self._done_jobs[key]
-            return job_id in self._done_jobs
+            for old in [k for k, t in self._done_jobs.items() if now - t > DEDUPE_SECONDS]:
+                del self._done_jobs[old]
+            if key in self._done_jobs or key in self._in_flight:
+                return False
+            self._in_flight.add(key)
+            return True
 
-    def _remember(self, job_id: str) -> None:
-        if job_id:
-            with self._jobs_guard:
-                self._done_jobs[job_id] = self.clock()
+    def _release(self, key: tuple | None, done: bool) -> None:
+        if key is None:
+            return
+        with self._jobs_guard:
+            self._in_flight.discard(key)
+            if done:
+                self._done_jobs[key] = self.clock()
 
     # -- ejecución común -----------------------------------------------
     def _run(self, *, kind: str, target: Target, document_type: str, origin, client_ip, source,
@@ -102,18 +131,31 @@ class PrintService:
                     payload_kind=payload_kind)
         store = settings.test_mode or (
             settings.store_images if payload_kind == "image" else settings.store_payload)
-        base["payload"] = data if store and payload_kind != "none" else None
+        limit = MAX_STORED_PAYLOAD_TEST if settings.test_mode else MAX_STORED_PAYLOAD
+        if payload_kind == "image" and settings.store_images:
+            limit = MAX_STORED_PAYLOAD_TEST
+        base["payload"] = data if store and payload_kind != "none" and len(data) <= limit else None
 
-        if self._seen(job_id):
+        key = (job_id, target.label, bool(settings.test_mode)) if job_id else None
+        if not self._claim(key):
             self.journal.record(**base, duration_ms=0, result="duplicate", http_status=200,
                                 message="Trabajo repetido: no se volvió a imprimir.")
             return {"result": True, "status": "success", "message": success_message,
                     "test_mode": settings.test_mode, "duplicate": True}
 
         started = time.monotonic()
+        done = False
         try:
-            with self._lock_for(target.label):
+            lock = self._lock_for(target.label)
+            # Espera acotada: una impresora trabada no puede ocupar todos los hilos.
+            if not lock.acquire(timeout=self.lock_timeout):
+                raise BridgeError(f"La impresora {target.label} está ocupada con otro trabajo. Intenta de nuevo.",
+                                  503, code="printer_busy")
+            try:
                 action(self._backend(settings))
+            finally:
+                lock.release()
+            done = True
         except BridgeError as exc:
             self.journal.record(**base, duration_ms=round((time.monotonic() - started) * 1000),
                                 result="error", http_status=exc.status, message=exc.message)
@@ -122,7 +164,8 @@ class PrintService:
             self.journal.record(**base, duration_ms=round((time.monotonic() - started) * 1000),
                                 result="error", http_status=500, message=str(exc))
             raise BridgeError(str(exc), 500) from exc
-        self._remember(job_id)
+        finally:
+            self._release(key, done)
         self.journal.record(**base, duration_ms=round((time.monotonic() - started) * 1000),
                             result="ok", http_status=200, message=success_message)
         return {"result": True, "status": "success", "message": success_message,

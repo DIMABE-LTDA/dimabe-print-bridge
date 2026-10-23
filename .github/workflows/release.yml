@@ -54,7 +54,8 @@ jobs:
           PFX_BASE64: ${{ secrets.PFX_BASE64 }}
           PFX_PASSWORD: ${{ secrets.PFX_PASSWORD }}
         run: |
-          if (-not $env:PFX_BASE64) { Write-Host "Sin certificado: el build sale sin firmar."; exit 0 }
+          # Sin firma no se publica: el POS ofrece este instalador como el último.
+          if (-not $env:PFX_BASE64 -or -not $env:PFX_PASSWORD) { throw "Faltan los secretos PFX_BASE64/PFX_PASSWORD." }
           $pfx = Join-Path $env:RUNNER_TEMP "firma.pfx"
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
           $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
@@ -81,4 +82,4 @@ jobs:
           $setup = "release/DimabePrintBridge-Setup-$version.exe"
           $notes = "Build automático de ${{ github.sha }}`n`n" + (git log -1 --pretty=%B)
           gh release create "v$version" $setup installer/dimabe-print-bridge.cer `
-            --title "Dimabe Print Bridge $version" --notes $notes --latest
+            --target "${{ github.sha }}" --title "Dimabe Print Bridge $version" --notes $notes --latest

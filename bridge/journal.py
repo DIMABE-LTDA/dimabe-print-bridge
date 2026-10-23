@@ -45,10 +45,11 @@ _STOP = object()
 
 
 class Journal:
-    def __init__(self, db_path: Path, clock: Callable[[], datetime] = datetime.now):
+    def __init__(self, db_path: Path, clock: Callable[[], datetime] = datetime.now, max_queue: int = 1000):
         self.db_path = Path(db_path)
         self.clock = clock
-        self._queue: queue.Queue = queue.Queue()
+        # Acotada: si la base se traba, se pierden registros, nunca memoria sin límite.
+        self._queue: queue.Queue = queue.Queue(maxsize=max_queue)
         self._thread: threading.Thread | None = None
         self._health_seen: dict[str, datetime] = {}
         self._health_lock = threading.Lock()
@@ -71,7 +72,10 @@ class Journal:
 
     def flush(self, timeout: float = 5) -> None:
         done = threading.Event()
-        self._queue.put(done)
+        try:
+            self._queue.put(done, timeout=timeout)
+        except queue.Full:
+            return
         done.wait(timeout)
 
     def _connect(self) -> sqlite3.Connection:
@@ -98,7 +102,7 @@ class Journal:
                     [item.get(c) for c in COLUMNS],
                 )
                 conn.commit()
-            except sqlite3.Error as exc:
+            except Exception as exc:  # noqa: BLE001 - el hilo escritor no puede morir
                 logger.error("No se pudo escribir en la bitácora: %s", exc)
                 if conn is not None:
                     try:
@@ -118,7 +122,14 @@ class Journal:
         row["test_mode"] = 1 if fields.get("test_mode") else 0
         if isinstance(row["payload"], (bytearray, memoryview)):
             row["payload"] = bytes(row["payload"])
-        self._queue.put(row)
+        for key, value in row.items():
+            if isinstance(value, str):
+                # Un sustituto UTF-16 suelto (JSON válido) no se puede guardar en SQLite.
+                row[key] = value.encode("utf-8", "replace").decode("utf-8")
+        try:
+            self._queue.put_nowait(row)
+        except queue.Full:
+            logger.error("Bitácora saturada: se descarta un registro (%s)", row.get("kind"))
 
     def should_log_health(self, origin: str) -> bool:
         now = self.clock()

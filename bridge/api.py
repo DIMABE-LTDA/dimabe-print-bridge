@@ -18,8 +18,11 @@ def _ctx():
     return current_app.config["BRIDGE_CTX"]
 
 
-def _error(message: str, status: int):
-    response = jsonify({"result": False, "status": "error", "message": message})
+def _error(message: str, status: int, code: str | None = None):
+    body = {"result": False, "status": "error", "message": message}
+    if code:
+        body["code"] = code
+    response = jsonify(body)
     response.status_code = status
     return response
 
@@ -118,7 +121,7 @@ def create_api_blueprint() -> Blueprint:
 
     @bp.errorhandler(BridgeError)
     def bridge_error(exc: BridgeError):
-        return _error(exc.message, exc.status)
+        return _error(exc.message, exc.status, exc.code)
 
     return bp
 
@@ -140,7 +143,7 @@ def register_api_errors(app) -> None:
 
     @app.errorhandler(BridgeError)
     def bridge_error(exc: BridgeError):
-        return _error(exc.message, exc.status)
+        return _error(exc.message, exc.status, exc.code)
 
     @app.errorhandler(Exception)
     def unexpected(exc):

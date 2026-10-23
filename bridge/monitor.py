@@ -20,7 +20,8 @@ QUEUE_TEXT = {
 
 class PrinterMonitor:
     def __init__(self, real, journal, settings_provider: Callable, interval_s: int = 60,
-                 connect=socket.create_connection):
+                 connect=socket.create_connection, is_busy: Callable[[str], bool] = lambda label: False):
+        self.is_busy = is_busy
         self.real = real
         self.journal = journal
         self.settings_provider = settings_provider
@@ -69,7 +70,17 @@ class PrinterMonitor:
             return "off", "Desconocido"
 
     def refresh_now(self) -> None:
-        status = {label: self._probe(label, kind) for label, kind in self._labels().items()}
+        with self._lock:
+            previous = dict(self._status)
+        status = {}
+        for label, kind in self._labels().items():
+            # Muchas impresoras de red aceptan una sola conexión: no se toca la que imprime.
+            if self.is_busy(label) and label in previous:
+                status[label] = previous[label]
+            elif self.is_busy(label):
+                status[label] = ("ok", "Imprimiendo")
+            else:
+                status[label] = self._probe(label, kind)
         with self._lock:
             self._status = status
 

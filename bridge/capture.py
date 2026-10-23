@@ -30,7 +30,8 @@ class CapturedJob:
 
 
 class CaptureStore:
-    def __init__(self, max_items: int = 500):
+    def __init__(self, max_items: int = 500, max_bytes: int = 50 * 1024 * 1024):
+        self.max_bytes = max_bytes
         self._jobs: deque[CapturedJob] = deque(maxlen=max_items)
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
@@ -40,6 +41,8 @@ class CaptureStore:
             job = CapturedJob(next(self._ids), datetime.now().astimezone().isoformat(timespec="seconds"),
                               target_label, document_type, kind, bytes(data))
             self._jobs.append(job)
+            while len(self._jobs) > 1 and sum(len(j.data) for j in self._jobs) > self.max_bytes:
+                self._jobs.popleft()
             return job
 
     def list(self, target_label: str | None = None) -> list[CapturedJob]:

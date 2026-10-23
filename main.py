@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         load_demo(ctx)
 
-    monitor = PrinterMonitor(ctx.real, ctx.journal, lambda: ctx.settings)
+    monitor = PrinterMonitor(ctx.real, ctx.journal, lambda: ctx.settings, is_busy=ctx.service.is_busy)
     ctx.monitor = monitor
     monitor.start()
     runner = ServerRunner(ctx)
