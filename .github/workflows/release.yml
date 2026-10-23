@@ -1,0 +1,84 @@
+# Cada push a main: pruebas → .exe → firma → instalador → Release de GitHub.
+# Odoo (dimabe_pos) toma el instalador del último Release.
+#
+# Versión publicada = versión base de bridge/__init__.py + número de ejecución
+# (1.0.0 → 1.0.0.<run>), para que cada push sea un Release distinto y el POS
+# pueda avisar cuando la caja tiene una versión más vieja.
+#
+# Secretos del repo: PFX_BASE64 (certificado de firma en base64) y PFX_PASSWORD.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Dependencias
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Pruebas
+        run: python -m pytest -q
+
+      - name: Versión de este build
+        id: version
+        shell: pwsh
+        run: |
+          $base = (Select-String -Path bridge/__init__.py -Pattern '__version__ = "([^"]+)"').Matches[0].Groups[1].Value
+          $version = "$base.${{ github.run_number }}"
+          (Get-Content bridge/__init__.py -Raw) -replace '__version__ = "[^"]+"', "__version__ = `"$version`"" |
+            Set-Content bridge/__init__.py -NoNewline
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Versión: $version"
+
+      - name: Certificado de firma
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.PFX_PASSWORD }}
+        run: |
+          if (-not $env:PFX_BASE64) { Write-Host "Sin certificado: el build sale sin firmar."; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "firma.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Set-Content installer/cert-thumbprint.txt $cert.Thumbprint -NoNewline
+          Remove-Item $pfx
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $found = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ }
+          if (-not $found) { choco install innosetup -y --no-progress }
+
+      - name: Ejecutable e instalador
+        shell: pwsh
+        run: ./installer/build.ps1 -SinPruebas
+
+      - name: Publicar Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $setup = "release/DimabePrintBridge-Setup-$version.exe"
+          $notes = "Build automático de ${{ github.sha }}`n`n" + (git log -1 --pretty=%B)
+          gh release create "v$version" $setup installer/dimabe-print-bridge.cer `
+            --title "Dimabe Print Bridge $version" --notes $notes --latest
