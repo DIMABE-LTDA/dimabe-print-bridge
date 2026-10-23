@@ -84,3 +84,4 @@ def test_seed_applied_once(data_dir):
     seed.write_text(json.dumps({"port": 4000}), encoding="utf-8")
     again = apply_installer_seed(s, seed)
     assert again.port == 3300
+    assert not seed.exists()

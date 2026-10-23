@@ -8,3 +8,4 @@ release/
 *.pfx
 .superpowers/
 data/
+installer/version_info.txt

@@ -133,7 +133,14 @@ def save_settings(s: Settings, path: Path | None = None) -> None:
 
 def apply_installer_seed(s: Settings, seed: Path) -> Settings:
     """Aplica una sola vez lo que el instalador dejó en installer-seed.json."""
-    if s.installer_seed_applied or not seed.exists():
+    if not seed.exists():
+        return s
+    if s.installer_seed_applied:
+        # Reinstalación: lo vigente se cambia desde el panel, no se pisa.
+        try:
+            seed.unlink()
+        except OSError:
+            pass
         return s
     try:
         values = json.loads(seed.read_text(encoding="utf-8-sig"))
