@@ -160,3 +160,7 @@ def apply_installer_seed(s: Settings, seed: Path) -> Settings:
     except OSError:
         pass
     return s
+
+
+def outbox_path() -> Path:
+    return data_dir() / "cola.sqlite"
