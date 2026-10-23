@@ -97,6 +97,9 @@ def main(argv: list[str] | None = None) -> int:
     monitor = PrinterMonitor(ctx.real, ctx.journal, lambda: ctx.settings, is_busy=ctx.service.is_busy)
     ctx.monitor = monitor
     monitor.start()
+    from bridge.outbox_worker import OutboxWorker  # noqa: PLC0415
+    worker = OutboxWorker(ctx.outbox, ctx.service, lambda: ctx.settings)
+    worker.start()
     runner = ServerRunner(ctx)
     runner.start()
 
@@ -110,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def shutdown():
         stop.set()
+        worker.stop()
         monitor.stop()
         runner.stop()
         ctx.journal.record(kind="service", result="ok", message="Servicio detenido")

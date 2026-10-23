@@ -191,6 +191,18 @@ def _attention(ctx, printers: list[dict]) -> list[dict]:
             items.append({"level": "warn", "title": f"{printer['label']}: {printer['status_text']}",
                           "detail": "Los trabajos quedan en la cola de Windows sin salir.",
                           "link": "/panel/impresoras"})
+    if ctx.outbox is not None:
+        counts = ctx.outbox.counts()
+        if counts["total"]:
+            minutes = round(counts["oldest_age_s"] / 60)
+            items.append({"level": "warn", "title": f"{counts['total']} comanda(s) en cola",
+                          "detail": f"Esperan que vuelva su impresora (la más antigua hace {minutes} min). "
+                                    "Se imprimen solas al volver.", "link": "/panel#cola"})
+        expired = ctx.outbox.expired()
+        if expired:
+            items.append({"level": "error", "title": f"{len(expired)} comanda(s) vencidas sin imprimir",
+                          "detail": "Pasaron 2 horas en cola sin que volviera la impresora. Avisa a cocina.",
+                          "link": "/panel#cola"})
     s = ctx.settings
     if s.test_mode:
         items.append({"level": "test", "title": "Modo prueba encendido",
@@ -471,6 +483,26 @@ def create_panel_api_blueprint() -> Blueprint:
                            bytes=len(job.data), result="ok", http_status=200,
                            message=f"Trabajo de prueba reenviado a {target.label}")
         return jsonify({"result": True, "message": f"Enviado a {target.label}."})
+
+    @bp.get("/queue")
+    def queue_list():
+        ctx = _ctx()
+        if ctx.outbox is None:
+            return jsonify({"pending": [], "counts": {"total": 0, "by_target": {}, "oldest_age_s": 0}, "expired": []})
+        return jsonify({"pending": ctx.outbox.pending(), "counts": ctx.outbox.counts(),
+                        "expired": ctx.outbox.expired()})
+
+    @bp.post("/queue/<int:queue_id>/retry")
+    def queue_retry(queue_id: int):
+        _ctx().outbox.retry_now(queue_id)
+        return jsonify({"result": True, "message": "Se reintenta en unos segundos."})
+
+    @bp.post("/queue/<int:queue_id>/discard")
+    def queue_discard(queue_id: int):
+        ctx = _ctx()
+        ctx.outbox.discard(queue_id)
+        ctx.journal.record(kind="queue", origin="panel", result="ok", message=f"Trabajo {queue_id} descartado de la cola")
+        return jsonify({"result": True, "message": "Trabajo descartado."})
 
     @bp.get("/settings")
     def settings_get():

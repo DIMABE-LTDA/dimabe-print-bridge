@@ -235,6 +235,25 @@ class PrintService:
                             test_mode=settings.test_mode)
         return self._queued_response(target, settings)
 
+    def deliver_queued(self, job) -> tuple[bool, str]:
+        """Intenta imprimir un trabajo de la cola. Devuelve (impreso, mensaje de error)."""
+        job_name = f"Dimabe {job.document_type}"
+        try:
+            self._run(kind="queue", target=job.target, document_type=job.document_type, origin="cola",
+                      client_ip="127.0.0.1", source="cola", payload_kind="raw", data=job.data,
+                      job_id=job.job_id or "", action=lambda b: b.send_raw(job.target, job.data, job_name),
+                      success_message=f"Impreso desde la cola en {job.target.label}.")
+            return True, ""
+        except BridgeError as exc:
+            if job.fallback is None or exc.code not in QUEUEABLE_CODES:
+                return False, exc.message
+            try:
+                self.print_fallback(job.target, job.fallback, job.data, job.document_type, job.job_id or "",
+                                    "cola", "127.0.0.1", source="cola")
+                return True, ""
+            except BridgeError as fallback_exc:
+                return False, f"{exc.message} Respaldo: {fallback_exc.message}"
+
     def _queued_response(self, target: Target, settings: Settings) -> dict:
         return {"result": True, "status": "queued", "queued": True, "test_mode": settings.test_mode,
                 "message": f"La impresora {target.label} no responde: el trabajo quedó en cola y se "
