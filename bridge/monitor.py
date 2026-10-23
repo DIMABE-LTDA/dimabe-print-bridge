@@ -80,7 +80,10 @@ class PrinterMonitor:
         labels = self._labels()
         rows = []
         for label in sorted(set(labels) | set(status)):
-            state, text = status.get(label, ("off", "Sin revisar"))
+            if self.settings_provider().test_mode:
+                state, text = "test", "Virtual (modo prueba)"
+            else:
+                state, text = status.get(label, ("off", "Sin revisar"))
             info = by_target.get(label, {"ok": 0, "error": 0, "last_ts": None, "last_message": None})
             rows.append({
                 "label": label, "kind": labels.get(label, "usb"), "status": state, "status_text": text,

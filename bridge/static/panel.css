@@ -12,7 +12,7 @@
   --line:#dde1db; --line-2:#c9cfc7;
   --brand:#1f5c46; --brand-ink:#ffffff; --brand-soft:#e3efe8;
   --ok:#1d7a4c; --ok-soft:#e2f3e9; --warn:#8a5200; --warn-soft:#fdf0d9; --err:#b42318; --err-soft:#fde7e4;
-  --test:#5b3fa8; --test-soft:#ece6fb; --focus:#2f6fdc;
+  --test:#5b3fa8; --test-soft:#ece6fb; --test-ink:#ffffff; --focus:#2f6fdc;
   --shadow:0 1px 2px rgba(23,32,27,.06),0 4px 14px rgba(23,32,27,.05);
   --radius:8px;
   --sans:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",Consolas,monospace;
@@ -22,17 +22,18 @@
   --bg:#121614; --surface:#1a201d; --sunken:#151a17; --ink:#e8ede9; --ink-2:#b4bfb8; --ink-3:#9aa69e;
   --line:#2a332e; --line-2:#36413b; --brand:#5fbf95; --brand-ink:#0d1a14; --brand-soft:#1c3328;
   --ok:#5fcf93; --ok-soft:#173025; --warn:#f0b351; --warn-soft:#33270f; --err:#ff8a7a; --err-soft:#3a1a16;
-  --test:#b9a3ff; --test-soft:#2a2340; --focus:#7aa7ff; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25);
+  --test:#b9a3ff; --test-soft:#2a2340; --test-ink:#1a1030; --focus:#7aa7ff; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25);
 }}
 :root[data-theme="dark"]{
   color-scheme:dark;
   --bg:#121614; --surface:#1a201d; --sunken:#151a17; --ink:#e8ede9; --ink-2:#b4bfb8; --ink-3:#9aa69e;
   --line:#2a332e; --line-2:#36413b; --brand:#5fbf95; --brand-ink:#0d1a14; --brand-soft:#1c3328;
   --ok:#5fcf93; --ok-soft:#173025; --warn:#f0b351; --warn-soft:#33270f; --err:#ff8a7a; --err-soft:#3a1a16;
-  --test:#b9a3ff; --test-soft:#2a2340; --focus:#7aa7ff; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25);
+  --test:#b9a3ff; --test-soft:#2a2340; --test-ink:#1a1030; --focus:#7aa7ff; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25);
 }
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
 ::selection{background:var(--brand);color:var(--brand-ink)}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
@@ -83,7 +84,7 @@ svg.s{width:15px;height:15px}
 .btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
 .btn.primary:hover{filter:brightness(1.07)}
 .btn.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--line))}
-.btn.test{background:var(--test);border-color:var(--test);color:#fff}
+.btn.test{background:var(--test);border-color:var(--test);color:var(--test-ink)}
 .btn.block{width:100%;justify-content:center}
 .btn:disabled,.btn[aria-busy="true"]{opacity:.5;cursor:not-allowed}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -193,12 +194,12 @@ table{width:100%;border-collapse:collapse}
 .queue button[aria-current="true"]{background:var(--test-soft)}
 .queue button small{color:var(--ink-3);display:block}
 .stage{background:var(--sunken);border:1px solid var(--line);border-radius:var(--radius);padding:24px 16px 30px;min-height:240px;overflow:auto}
-.paper{width:max-content;min-width:302px;background:#fffdf7;color:#1b1b1b;margin:0 auto;padding:18px 16px 26px;font-family:var(--mono);font-size:12px;line-height:1.45;box-shadow:0 2px 6px rgba(0,0,0,.12),0 12px 28px rgba(0,0,0,.1)}
-.paper .ln{white-space:pre;min-height:1.45em}
+.paper{width:min(360px,100%);background:#fffdf7;color:#1b1b1b;margin:0 auto;padding:18px 16px 26px;font-family:var(--mono);font-size:12px;line-height:1.45;box-shadow:0 2px 6px rgba(0,0,0,.12),0 12px 28px rgba(0,0,0,.1)}
+.paper .ln{white-space:pre-wrap;min-height:1.45em;overflow-wrap:anywhere}
 .paper .ln.center{text-align:center}.paper .ln.right{text-align:right}
 .paper .ln.b{font-weight:600}
 .paper .unk{color:#8a8f8c;font-size:10.5px;white-space:normal}
-.paper img{display:block;max-width:100%;image-rendering:pixelated;margin:4px auto}
+.paper img{display:block;width:100%;height:auto;image-rendering:pixelated;margin:4px auto}
 .cut{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:11.5px;margin:14px 0}
 .cut::before,.cut::after{content:"";flex:1;border-top:1px dashed #9a9a9a}
 .zpl{font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-all;margin:0}

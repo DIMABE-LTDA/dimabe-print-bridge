@@ -129,6 +129,12 @@
     try { localStorage.setItem("bridge-theme", root.dataset.theme); } catch (err) { /* sin almacenamiento */ }
   });
 
+  function lastText(p) {
+    const msg = p.last_message || "";
+    if (/^(Raw bytes sent|Printed on|Cash drawer pulse)/.test(msg)) return "Impreso";
+    return msg;
+  }
+
   // -- impresoras: fila común ----------------------------------------------
   const STATUS_PILL = { ok: "ok", warn: "warn", error: "err", test: "test", off: "off" };
   function printerStatus(p) { return h("span", { class: "pill " + (STATUS_PILL[p.status] || "off") }, p.status_text || "—"); }
@@ -159,14 +165,15 @@
         t.error ? ["; ", h("b", { class: "num", style: "color:var(--err)" }, nf.format(t.error)), " fallaron",
           failed.length ? [", en ", h("b", {}, failed.join(", "))] : ""] : "",
         ".");
-      $("#status-pills").replaceChildren(
+      $("#status-pills").replaceChildren(...[
         h("span", { class: "pill " + (s.state === "running" ? "ok" : "err") }, s.state === "running" ? "Servicio en línea" : "Puerto ocupado"),
         h("span", { class: "pill " + (s.api_key_set ? "ok" : "warn") }, s.api_key_set ? "Clave API activa" : "Sin clave API"),
         h("span", { class: "pill " + (s.test_mode ? "test" : "off") }, s.test_mode ? "Modo prueba encendido" : "Modo prueba apagado"),
-        s.remote_enabled ? h("span", { class: "pill warn" }, "Panel abierto a la red") : null);
+        s.remote_enabled ? h("span", { class: "pill warn" }, "Panel abierto a la red") : null].filter(Boolean));
       const last = Object.values(t.by_target).filter((v) => v.last_ts).sort((a, b) => (a.last_ts < b.last_ts ? 1 : -1))[0];
       const facts = $$("#status-facts dd");
-      facts[0].textContent = last ? `${fmtTime(last.last_ts)} · ${last.last_message || ""}` : "Sin trabajos hoy";
+      const lastLabel = Object.entries(t.by_target).find(([, v]) => v === last)?.[0];
+      facts[0].textContent = last ? `${fmtTime(last.last_ts)} · ${lastLabel}` : "Sin trabajos hoy";
       facts[1].textContent = t.total ? `${t.ok + t.error} hoy` : "—";
       facts[1].previousElementSibling.textContent = "Trabajos de hoy";
       facts[2].textContent = data.last_rejected ? `${data.last_rejected.ts.slice(0, 10)} ${fmtTime(data.last_rejected.ts).slice(0, 5)} · ${originLabel(data.last_rejected.origin)}` : "Ninguna";
@@ -191,7 +198,7 @@
         h("td", {}, connection(p)),
         h("td", {}, printerStatus(p)),
         h("td", { class: "r num" }, nf.format(p.today_ok + p.today_error)),
-        h("td", { class: "num" }, p.last_ts ? `${fmtTime(p.last_ts).slice(0, 5)} · ${p.last_message || ""}` : "—"))) :
+        h("td", { class: "num" }, p.last_ts ? `${fmtTime(p.last_ts).slice(0, 5)} · ${lastText(p)}` : "—"))) :
         [h("tr", {}, h("td", { colspan: 5, class: "empty" }, "Todavía no hay trabajos hoy. Cuando el POS imprima, las impresoras aparecerán aquí."))]));
     };
     const renderHours = (t) => {
@@ -363,7 +370,7 @@
       } else if (line.type === "cut") {
         paper.append(h("div", { class: "cut" }, line.mode === "partial" ? "corte parcial" : "corte total"));
       } else if (line.type === "image") {
-        paper.append(h("img", { src: "data:image/png;base64," + line.png_base64, width: line.width, alt: "Imagen del ticket" }));
+        paper.append(h("img", { src: "data:image/png;base64," + line.png_base64, alt: "Imagen del ticket" }));
       } else if (line.type === "unknown") {
         paper.append(h("div", { class: "unk", title: "Comando no interpretado" }, `[${line.hex}]`));
       }
