@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block subtitle %}Cargando…{% endblock %}
+{% block actions %}
+<button class="btn" type="button" data-action="refresh"><svg class="i s" aria-hidden="true"><use href="#i-refresh"/></svg>Revisar ahora</button>
+{% endblock %}
+{% block content %}
+<section class="status" aria-labelledby="status-title">
+  <div class="status-main">
+    <div class="beacon" id="status-beacon" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></div>
+    <div>
+      <h3 id="status-title">Revisando el puente…</h3>
+      <p id="status-text" class="muted">Un momento.</p>
+      <div class="inline pills" id="status-pills"></div>
+    </div>
+  </div>
+  <dl class="facts" id="status-facts">
+    <div><dt>Último trabajo</dt><dd>—</dd></div>
+    <div><dt>Tiempo medio por trabajo</dt><dd>—</dd></div>
+    <div><dt>Última petición rechazada</dt><dd>—</dd></div>
+    <div><dt>Bitácora en disco</dt><dd>—</dd></div>
+  </dl>
+</section>
+
+<div class="section-h"><h3>Impresoras</h3><span class="meta" id="printers-meta"></span><a href="/panel/impresoras">Ver detalle</a></div>
+<div class="tbl">
+  <table>
+    <thead><tr><th scope="col">Impresora</th><th scope="col">Conexión</th><th scope="col">Estado</th><th scope="col" class="r">Hoy</th><th scope="col">Último trabajo</th></tr></thead>
+    <tbody id="printers-body"><tr><td colspan="5" class="empty">Cargando…</td></tr></tbody>
+  </table>
+</div>
+
+<div class="two">
+  <section class="panel">
+    <h3 class="h4">Trabajos por hora, hoy</h3>
+    <div class="hours" id="hours" role="img" aria-label="Trabajos por hora"></div>
+    <div class="hours-axis num" aria-hidden="true"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div>
+    <div class="legend"><span><i style="background:var(--brand)"></i>Impresos</span><span><i style="background:var(--err)"></i>Con error</span></div>
+  </section>
+  <section class="panel">
+    <h3 class="h4">Requiere atención</h3>
+    <div class="attention" id="attention"><p class="muted">Cargando…</p></div>
+  </section>
+</div>
+{% endblock %}

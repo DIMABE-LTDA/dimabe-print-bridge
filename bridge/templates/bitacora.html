@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block subtitle %}Cargando…{% endblock %}
+{% block actions %}
+<a class="btn" id="csv-link" href="#"><svg class="i s" aria-hidden="true"><use href="#i-download"/></svg>Exportar CSV del día</a>
+{% endblock %}
+{% block content %}
+<form class="filters" id="journal-filters">
+  <div class="field"><label for="f-day">Día</label><input id="f-day" class="input num" type="date" name="day"></div>
+  <div class="field"><span class="label" id="f-result-label">Resultado</span>
+    <div class="seg" role="group" aria-labelledby="f-result-label" id="f-result">
+      <button type="button" data-value="" aria-pressed="true">Todos <span class="num" data-count="total"></span></button>
+      <button type="button" data-value="ok" aria-pressed="false">Correctos <span class="num" data-count="ok"></span></button>
+      <button type="button" data-value="error" aria-pressed="false">Con error <span class="num" data-count="error"></span></button>
+      <button type="button" data-value="rejected" aria-pressed="false">Rechazados <span class="num" data-count="rejected"></span></button>
+    </div>
+  </div>
+  <div class="field"><label for="f-target">Impresora</label><select id="f-target" class="input" name="target"><option value="">Todas</option></select></div>
+  <div class="field"><label for="f-doc">Documento</label>
+    <select id="f-doc" class="input" name="document_type">
+      <option value="">Todos</option><option value="receipt">Boleta</option><option value="kitchen">Comanda</option>
+      <option value="preparation">Preparación</option><option value="label">Etiqueta</option><option value="cashbox">Cajón</option><option value="test">Prueba</option>
+    </select></div>
+  <div class="field grow"><label for="f-q">Buscar</label><input id="f-q" class="input" name="q" placeholder="Texto del mensaje, IP, sitio…"></div>
+</form>
+
+<div class="logwrap">
+  <div class="tbl flat">
+    <table>
+      <thead><tr><th scope="col">Hora</th><th scope="col">Acción</th><th scope="col">Destino</th><th scope="col">Origen</th><th scope="col" class="r">Bytes</th><th scope="col" class="r">Duración</th><th scope="col">Resultado</th></tr></thead>
+      <tbody id="journal-body" class="num"><tr><td colspan="7" class="empty">Cargando…</td></tr></tbody>
+    </table>
+    <div class="more"><button class="btn" type="button" id="journal-more" hidden>Ver más</button></div>
+  </div>
+  <aside class="detail" id="journal-detail" aria-label="Detalle del registro">
+    <p class="muted">Elige un registro para ver el detalle.</p>
+  </aside>
+</div>
+<p class="help">Los registros se guardan en <span class="mono">bitacora.sqlite</span> y se borran solos después de <b class="num">{{ settings.retention_days }}</b> días (se cambia en Configuración).</p>
+{% endblock %}

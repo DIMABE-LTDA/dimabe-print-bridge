@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block subtitle %}Las que Windows tiene instaladas y las de red que usó el POS{% endblock %}
+{% block actions %}
+<button class="btn" type="button" data-action="refresh"><svg class="i s" aria-hidden="true"><use href="#i-refresh"/></svg>Volver a buscar</button>
+{% endblock %}
+{% block content %}
+<div class="tbl">
+  <table>
+    <thead><tr><th scope="col">Nombre</th><th scope="col">Tipo</th><th scope="col">Destino</th><th scope="col">Estado</th><th scope="col" class="r">Hoy</th><th scope="col" class="r">Errores hoy</th><th scope="col"><span class="sr">Acciones</span></th></tr></thead>
+    <tbody id="printers-body"><tr><td colspan="7" class="empty">Cargando…</td></tr></tbody>
+  </table>
+</div>
+
+<section class="panel">
+  <h3 class="h4">Probar una impresora de red que no aparece</h3>
+  <p class="help">Escribe la IP de la impresora tal como está configurada en Odoo.</p>
+  <form class="inline" id="ip-test-form">
+    <div class="field"><label for="ip-test-ip">IP</label><input class="input mono" id="ip-test-ip" placeholder="192.168.1.50" required></div>
+    <div class="field"><label for="ip-test-port">Puerto</label><input class="input num" id="ip-test-port" value="9100" inputmode="numeric" style="width:90px"></div>
+    <div class="field"><span class="label-spacer" aria-hidden="true">&nbsp;</span>
+      <div class="inline"><button class="btn" type="submit" value="connection">Probar conexión</button><button class="btn" type="submit" value="text">Imprimir prueba</button></div></div>
+  </form>
+  <p class="help" id="ip-test-result" role="status"></p>
+</section>
+
+<section class="panel">
+  <h3 class="h4">Si una impresora no responde</h3>
+  <ol class="steps">
+    <li>Revisa que esté encendida, con papel y sin la tapa abierta.</li>
+    <li>Si es de red, que la luz del cable esté prendida y que su IP siga siendo la que tiene Odoo (imprime su hoja de configuración manteniendo FEED al encender).</li>
+    <li>Si es USB y aparece «Pausada» o «Sin conexión», reanúdala en Configuración de Windows › Impresoras.</li>
+    <li>Si cambió de IP o de nombre, actualízala en Odoo › Punto de venta › Configuración.</li>
+  </ol>
+</section>
+{% endblock %}

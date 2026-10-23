@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block subtitle %}Los cambios se aplican al guardar{% endblock %}
+{% block actions %}
+<button class="btn primary" type="submit" form="settings-form">Guardar cambios</button>
+{% endblock %}
+{% block content %}
+<div class="settings">
+  <nav class="settings-nav" aria-label="Secciones">
+    <a href="#conexion">Conexión con el POS</a><a href="#seguridad">Seguridad</a><a href="#acceso">Acceso al panel</a><a href="#bitacora">Bitácora</a>
+  </nav>
+  <form id="settings-form" novalidate>
+    <section class="group" id="conexion">
+      <h3>Conexión con el POS</h3>
+      <p>Debe coincidir con la «URL del puente» configurada en Odoo.</p>
+      <div class="form-row"><label class="lbl" for="s-port">Puerto<small>Cambiarlo reinicia el servicio</small></label>
+        <div><input class="input num" id="s-port" name="port" inputmode="numeric" style="width:110px"><div class="help" id="s-port-help"></div></div></div>
+      <div class="form-row"><span class="lbl" id="s-paper-label">Ancho de papel por defecto<small>Para recibos como imagen</small></span>
+        <div class="seg" role="group" aria-labelledby="s-paper-label" id="s-paper">
+          <button type="button" data-value="58">58 mm</button><button type="button" data-value="76">76 mm</button><button type="button" data-value="80">80 mm</button>
+        </div></div>
+    </section>
+
+    <section class="group" id="seguridad">
+      <h3>Seguridad</h3>
+      <p>Quién puede pedirle cosas al puente.</p>
+      <div class="form-row"><span class="lbl">Clave API<small>La misma que en el POS</small></span>
+        <div><div class="inline"><span id="s-key-state" class="pill off">Sin clave</span><button class="btn" type="button" data-action="generate-key">Generar nueva</button></div>
+          <div class="help" id="s-key-new" role="status"></div></div></div>
+      <div class="form-row"><span class="lbl">Sitios permitidos<small>Se aceptan comodines *</small></span>
+        <div><div class="chips" id="s-origins"></div>
+          <div class="inline mt-s"><label class="sr" for="s-origin-new">Nuevo sitio</label><input class="input mono" id="s-origin-new" placeholder="https://pos.midominio.cl" style="width:280px"><button class="btn" type="button" data-action="add-origin">Agregar</button></div></div></div>
+      <div class="form-row"><label class="lbl" for="s-ports">Impresoras de red<small>Puertos permitidos</small></label>
+        <div><input class="input mono" id="s-ports" name="allowed_printer_ports" style="width:200px"><div class="help">Solo IP privadas (10.x, 172.16-31.x, 192.168.x). Ejemplo: 9100-9109.</div></div></div>
+    </section>
+
+    <section class="group" id="acceso">
+      <h3>Acceso al panel</h3>
+      <p>Por defecto el panel solo se abre en este equipo. Si lo abres a la red, TI puede revisarlo desde su PC con usuario y clave. Desde la red solo se ve el panel: las impresiones siguen aceptándose únicamente desde este equipo.</p>
+      <div class="form-row"><label class="lbl" for="s-remote">Abrir panel a la red</label>
+        <div><label class="switch"><input type="checkbox" id="s-remote" role="switch"><i aria-hidden="true"></i><span id="s-remote-text">Apagado</span></label>
+          <div class="help" id="s-remote-help"></div></div></div>
+      <div class="form-row"><label class="lbl" for="s-remote-port">Puerto del panel en la red</label>
+        <div><input class="input num" id="s-remote-port" inputmode="numeric" style="width:110px"></div></div>
+      <div class="form-row"><span class="lbl">Usuario y clave del panel<small>Clave de 8 caracteres o más</small></span>
+        <div><div class="inline"><label class="sr" for="s-ruser">Usuario</label><input class="input" id="s-ruser" autocomplete="username" placeholder="Usuario" style="width:150px">
+          <label class="sr" for="s-rpass">Clave</label><input class="input" id="s-rpass" type="password" autocomplete="new-password" placeholder="Clave nueva" style="width:190px">
+          <button class="btn" type="button" data-action="save-remote-password">Guardar clave</button></div>
+          <div class="help" id="s-rpass-state" role="status"></div></div></div>
+      <div class="form-row"><label class="lbl" for="s-networks">Redes que pueden entrar<small>Separadas por coma</small></label>
+        <div><input class="input mono" id="s-networks" placeholder="192.168.1.0/24" style="width:280px"></div></div>
+    </section>
+
+    <section class="group" id="bitacora">
+      <h3>Bitácora</h3>
+      <p>Un registro por petición del POS, guardado en SQLite.</p>
+      <div class="form-row"><label class="lbl" for="s-retention">Guardar registros durante</label>
+        <div class="inline"><input class="input num" id="s-retention" inputmode="numeric" style="width:90px"><span>días</span></div></div>
+      <div class="form-row"><label class="lbl" for="s-store">Guardar bytes enviados<small>Para reenviar y ver el ticket</small></label>
+        <div><label class="switch"><input type="checkbox" id="s-store" role="switch"><i aria-hidden="true"></i><span>Comandas y textos</span></label></div></div>
+      <div class="form-row"><label class="lbl" for="s-store-img">Guardar imágenes de boleta<small>Unos 50 KB por boleta</small></label>
+        <div><label class="switch"><input type="checkbox" id="s-store-img" role="switch"><i aria-hidden="true"></i><span>Imágenes</span></label></div></div>
+      <div class="form-row"><span class="lbl">Tamaño actual</span>
+        <div class="inline"><span class="num" id="s-journal-size">—</span><button class="btn danger" type="button" data-action="purge-all">Borrar bitácora…</button></div></div>
+    </section>
+  </form>
+</div>
+{% endblock %}

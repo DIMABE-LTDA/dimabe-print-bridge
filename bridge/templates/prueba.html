@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block subtitle %}Probar el POS sin impresoras{% endblock %}
+{% block actions %}
+{% if settings.test_mode %}
+<button class="btn" type="button" data-action="test-mode" data-enable="false">Apagar modo prueba</button>
+{% else %}
+<button class="btn test" type="button" data-action="test-mode" data-enable="true"><svg class="i s" aria-hidden="true"><use href="#i-flask"/></svg>Encender modo prueba</button>
+{% endif %}
+<button class="btn" type="button" data-action="clear-jobs">Vaciar trabajos</button>
+{% endblock %}
+{% block content %}
+{% if not settings.test_mode %}
+<div class="callout">
+  <svg class="i" aria-hidden="true"><use href="#i-flask"/></svg>
+  <div><b>El modo prueba está apagado.</b> Al encenderlo, todo lo que mande el POS se guarda aquí en vez de imprimirse, y el cajón no se abre. Úsalo en equipos sin impresoras o para revisar qué manda el POS.</div>
+</div>
+{% endif %}
+<div class="test-grid">
+  <div>
+    <h3 class="h4">Impresoras virtuales</h3>
+    <div class="vprinters" id="vprinters"></div>
+    <h3 class="h4 mt">Trabajos recibidos</h3>
+    <div class="queue" id="queue"><p class="muted">Aún no llega ningún trabajo.</p></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Así habría salido</h3><span class="meta" id="preview-meta"></span></div>
+    <div class="stage" id="stage"><p class="muted center">Elige un trabajo para ver cómo habría salido.</p></div>
+    <div class="inline center mt" id="preview-actions" hidden>
+      <button class="btn" type="button" data-action="toggle-hex">Ver bytes</button>
+      <button class="btn" type="button" data-action="forward">Enviar a impresora real…</button>
+    </div>
+    <pre class="hexbox mt" id="preview-hex" hidden></pre>
+  </div>
+  <div>
+    <h3 class="h4">Cómo responde el puente</h3>
+    <section class="panel stack">
+      <div class="field"><label for="sim-response">Respuesta al POS</label>
+        <select class="input" id="sim-response">
+          <option value="ok">Imprime bien</option><option value="no_paper">Sin papel</option>
+          <option value="offline">Impresora desconectada</option><option value="timeout">Tarda y se pasa del tiempo de espera</option>
+          <option value="one_in_three">Falla una de cada tres</option>
+        </select></div>
+      <div class="field"><span class="label" id="sim-delay-label">Demora simulada</span>
+        <div class="seg" role="group" aria-labelledby="sim-delay-label" id="sim-delay">
+          <button type="button" data-value="0">Ninguna</button><button type="button" data-value="1">1 s</button>
+          <button type="button" data-value="5">5 s</button><button type="button" data-value="20">20 s</button>
+        </div></div>
+      <p class="help">Sirve para ver qué mensaje muestra el POS y si ofrece reintentar sin duplicar comandas.</p>
+    </section>
+    <h3 class="h4 mt">Prueba sin POS</h3>
+    <section class="panel stack">
+      <div class="field"><label for="sample-target">Impresora (nombre o IP)</label>
+        <input class="input" id="sample-target" value="Impresora de prueba" list="sample-targets"><datalist id="sample-targets"></datalist></div>
+      <button class="btn test" type="button" data-sample="boleta">Enviar boleta de ejemplo</button>
+      <button class="btn" type="button" data-sample="comanda">Enviar comanda de ejemplo</button>
+      <button class="btn" type="button" data-sample="etiqueta">Enviar etiqueta ZPL de ejemplo</button>
+    </section>
+  </div>
+</div>
+{% endblock %}
