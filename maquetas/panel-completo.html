@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dimabe Print Bridge — maquetas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f4f2; --surface:#ffffff; --sunken:#eceee9; --ink:#17201b; --ink-2:#4a554e; --ink-3:#5b655e;
+  --line:#dde1db; --line-2:#c9cfc7;
+  --brand:#1f5c46; --brand-ink:#ffffff; --brand-soft:#e3efe8;
+  --ok:#1d7a4c; --ok-soft:#e2f3e9; --warn:#9a5b00; --warn-soft:#fdf0d9; --err:#b42318; --err-soft:#fde7e4;
+  --test:#5b3fa8; --test-soft:#ece6fb;
+  --focus:#2f6fdc;
+  --shadow:0 1px 2px rgba(23,32,27,.06),0 4px 14px rgba(23,32,27,.05);
+  --radius:8px;
+  --sans:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#121614; --surface:#1a201d; --sunken:#151a17; --ink:#e8ede9; --ink-2:#b4bfb8; --ink-3:#8d9a92;
+  --line:#2a332e; --line-2:#36413b;
+  --brand:#5fbf95; --brand-ink:#0d1a14; --brand-soft:#1c3328;
+  --ok:#5fcf93; --ok-soft:#173025; --warn:#f0b351; --warn-soft:#33270f; --err:#ff8a7a; --err-soft:#3a1a16;
+  --test:#b9a3ff; --test-soft:#2a2340; --focus:#7aa7ff;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+::selection{background:var(--brand);color:var(--brand-ink)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+button{font:inherit;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:12.5px}
+
+/* page chrome of the mockup board */
+.board{max-width:1360px;margin:0 auto;padding:28px 24px 80px}
+.board-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.board-head h1{font-size:22px;margin:0;letter-spacing:-.01em}
+.board-head p{margin:4px 0 0;color:var(--ink-2);max-width:70ch}
+.screen-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 14px}
+.screen-tabs button{border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);padding:7px 12px;border-radius:999px;font-weight:500}
+.screen-tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.theme-toggle{border:1px solid var(--line-2);background:var(--surface);color:var(--ink);padding:7px 12px;border-radius:6px;display:inline-flex;gap:8px;align-items:center}
+.note{background:var(--surface);border:1px dashed var(--line-2);border-radius:var(--radius);padding:10px 14px;color:var(--ink-2);margin:0 0 14px;font-size:13px}
+.note b{color:var(--ink)}
+
+/* app window */
+.window{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.titlebar{display:flex;align-items:center;gap:10px;padding:0 14px;height:38px;border-bottom:1px solid var(--line);background:var(--sunken);color:var(--ink-3);font-size:12px}
+.titlebar .dots{display:flex;gap:6px}.titlebar .dots i{width:10px;height:10px;border-radius:50%;background:var(--line-2);display:block}
+.titlebar .url{flex:1;text-align:center;font-family:var(--mono)}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:720px}
+.side{border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px;background:var(--surface)}
+.brandmark{display:flex;align-items:center;gap:10px;padding:4px 8px 16px}
+.brandmark .logo{width:30px;height:30px;border-radius:7px;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center}
+.brandmark b{display:block;font-size:14px;line-height:1.2}
+.brandmark span{font-size:12px;color:var(--ink-3)}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:var(--ink-2);text-decoration:none;font-weight:500}
+.nav a:hover{background:var(--sunken);color:var(--ink)}
+.nav a[aria-current="page"]{background:var(--brand-soft);color:var(--ink)}
+.nav a[aria-current="page"] svg{color:var(--brand)}
+.nav .count{margin-left:auto;font-size:11.5px;background:var(--err-soft);color:var(--err);padding:0 7px;border-radius:999px;font-weight:600}
+.side-foot{margin-top:auto;padding:12px 10px 4px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-3)}
+.side-foot div{display:flex;justify-content:space-between}
+svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.s{width:15px;height:15px}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--line)}
+.topbar h2{margin:0;font-size:18px;letter-spacing:-.01em}
+.topbar .sub{color:var(--ink-3);font-size:13px}
+.topbar .spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);padding:7px 12px;border-radius:6px;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--sunken)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--line))}
+.btn.test{background:var(--test);border-color:var(--test);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.content{padding:20px 24px 28px;display:flex;flex-direction:column;gap:20px}
+
+.testbanner{display:flex;align-items:center;gap:10px;background:var(--test-soft);color:var(--test);padding:9px 24px;font-weight:600;border-bottom:1px solid color-mix(in srgb,var(--test) 25%,transparent)}
+.testbanner span{font-weight:400;color:var(--ink-2)}
+.testbanner .btn{margin-left:auto}
+
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.err{background:var(--err-soft);color:var(--err)}
+.pill.test{background:var(--test-soft);color:var(--test)}
+.pill.off{background:var(--sunken);color:var(--ink-3)}
+
+/* status hero: a sentence, not a metric template */
+.status{display:grid;grid-template-columns:1.4fr 1fr;gap:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.status-main{padding:18px 20px;display:flex;gap:16px;align-items:flex-start}
+.beacon{width:44px;height:44px;border-radius:10px;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;flex:none}
+.status-main h3{margin:0 0 2px;font-size:17px}
+.status-main p{margin:0;color:var(--ink-2)}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-left:1px solid var(--line);background:var(--sunken)}
+.facts div{padding:12px 16px;border-bottom:1px solid var(--line)}
+.facts div:nth-child(odd){border-right:1px solid var(--line)}
+.facts dt{font-size:12px;color:var(--ink-3)}
+.facts dd{margin:0;font-weight:600}
+.facts div:nth-last-child(-n+2){border-bottom:0}
+
+.section-h{display:flex;align-items:baseline;gap:10px;margin:4px 0 -8px}
+.section-h h3{margin:0;font-size:15px}
+.section-h .meta{color:var(--ink-3);font-size:12.5px}
+.section-h a{margin-left:auto;color:var(--brand);font-weight:500;text-decoration:none;font-size:13px}
+
+table{width:100%;border-collapse:collapse}
+.tbl{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.tbl table th{font-size:12px;color:var(--ink-3);font-weight:500;text-align:left;padding:8px 12px;background:var(--sunken);border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl table td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl table tr:last-child td{border-bottom:0}
+.tbl table tr:hover td{background:color-mix(in srgb,var(--sunken) 60%,transparent)}
+.tbl .r{text-align:right}
+.muted{color:var(--ink-3)}
+.target{display:flex;flex-direction:column}
+.target small{color:var(--ink-3);font-family:var(--mono);font-size:12px}
+tr.sel td{background:var(--brand-soft)!important}
+
+.two{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
+.panel{border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.panel h4{margin:0 0 10px;font-size:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
+.kv dt{color:var(--ink-3)} .kv dd{margin:0}
+
+/* timeline of today */
+.hours{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;align-items:end;height:84px;padding-top:6px}
+.hours div{background:var(--brand);opacity:.85;border-radius:2px 2px 0 0;min-height:2px;position:relative}
+.hours div.e{background:var(--err)}
+.hours-axis{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;font-size:11px;color:var(--ink-3);margin-top:4px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin-top:8px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* filters */
+.filters{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;color:var(--ink-2);font-weight:500}
+.input,select.input{border:1px solid var(--line-2);background:var(--surface);color:var(--ink);border-radius:6px;padding:7px 10px;font:inherit;min-width:0}
+.input:focus{outline:2px solid var(--focus);outline-offset:0}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:7px 11px;color:var(--ink-2);border-right:1px solid var(--line-2)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+/* log detail drawer */
+.logwrap{display:grid;grid-template-columns:1fr 360px;gap:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.logwrap .tbl{border:0;border-radius:0;border-right:1px solid var(--line)}
+.detail{padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--surface)}
+.detail h4{margin:0;font-size:14px}
+.hexbox{background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--ink-2);word-break:break-all;max-height:140px;overflow:auto}
+
+/* receipt preview */
+.paper{width:302px;background:#fffdf7;color:#1b1b1b;margin:0 auto;padding:18px 16px 26px;font-family:var(--mono);font-size:12px;line-height:1.45;box-shadow:0 2px 6px rgba(0,0,0,.12),0 12px 28px rgba(0,0,0,.10);position:relative}
+.paper::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:8px;background:linear-gradient(-45deg,transparent 4px,#fffdf7 0) 0 0/8px 8px,linear-gradient(45deg,transparent 4px,#fffdf7 0) 0 0/8px 8px}
+.paper .c{text-align:center}.paper .big{font-size:20px;font-weight:600;line-height:1.2}.paper hr{border:0;border-top:1px dashed #9a9a9a;margin:8px 0}
+.paper .row{display:flex;justify-content:space-between}
+.cut{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:11.5px;margin:18px auto 0;width:302px}
+.cut::before,.cut::after{content:"";flex:1;border-top:1px dashed var(--line-2)}
+.stage{background:var(--sunken);border:1px solid var(--line);border-radius:var(--radius);padding:24px 16px 30px}
+
+.vprinters{display:flex;flex-direction:column;gap:8px}
+.vp{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--surface)}
+.vp[aria-current="true"]{border-color:var(--test);box-shadow:0 0 0 1px var(--test) inset}
+.vp .meta{display:flex;flex-direction:column;flex:1;min-width:0}
+.vp .meta small{color:var(--ink-3)}
+.queue{display:flex;flex-direction:column}
+.queue button{display:flex;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;padding:9px 4px;color:var(--ink)}
+.queue button[aria-current="true"]{background:var(--test-soft)}
+.queue button small{color:var(--ink-3)}
+
+/* settings */
+.settings{display:grid;grid-template-columns:200px 1fr;gap:28px}
+.settings nav a{display:block;padding:6px 10px;border-radius:6px;color:var(--ink-2);text-decoration:none}
+.settings nav a[aria-current="true"]{background:var(--sunken);color:var(--ink);font-weight:600}
+.group{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:20px}
+.group:last-child{border:0;margin:0}
+.group h4{margin:0 0 2px;font-size:15px}
+.group > p{margin:0 0 14px;color:var(--ink-2);max-width:68ch}
+.form-row{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;padding:8px 0}
+.form-row .lbl{font-weight:500}
+.form-row .lbl small{display:block;color:var(--ink-3);font-weight:400}
+.help{font-size:12.5px;color:var(--ink-3);margin-top:4px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line-2);border-radius:6px;padding:3px 6px 3px 9px;font-family:var(--mono);font-size:12px;background:var(--sunken)}
+.chip button{border:0;background:transparent;color:var(--ink-3);padding:0 2px;line-height:1}
+.switch{display:inline-flex;align-items:center;gap:10px}
+.switch i{width:36px;height:20px;border-radius:999px;background:var(--line-2);position:relative;display:block}
+.switch i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch.on i{background:var(--brand)}.switch.on i::after{left:18px}
+.switch.test.on i{background:var(--test)}
+.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.warnbox{display:flex;gap:10px;background:var(--warn-soft);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px}
+.warnbox svg{color:var(--warn)}
+
+/* login */
+.login{min-height:560px;display:grid;place-items:center;background:var(--bg)}
+.login-card{width:min(380px,92%);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;box-shadow:var(--shadow)}
+.login-card h3{margin:14px 0 4px;font-size:18px}
+.login-card p{margin:0 0 18px;color:var(--ink-2)}
+.login-card .field{margin-bottom:12px}
+.login-card .input{width:100%}
+.login-card .err{color:var(--err);font-size:12.5px;margin-top:4px}
+
+/* tray + installer */
+.extras{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start}
+.desk{background:linear-gradient(160deg,#2c4a5c,#1d2f3a);border-radius:12px;padding:20px;min-height:380px;position:relative;overflow:hidden}
+.traymenu{position:absolute;right:20px;bottom:54px;width:270px;background:#fbfbfa;color:#1b1b1b;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:6px;font-size:13px}
+.traymenu .hd{padding:8px 10px;border-bottom:1px solid #e6e6e3;margin-bottom:4px}
+.traymenu .hd b{display:block}
+.traymenu .hd span{font-size:12px;color:#55605a}
+.traymenu div.it{padding:7px 10px;border-radius:5px;display:flex;justify-content:space-between}
+.traymenu div.it:hover{background:#ecefed}
+.traymenu hr{border:0;border-top:1px solid #e6e6e3;margin:4px 0}
+.taskbar{position:absolute;left:0;right:0;bottom:0;height:40px;background:rgba(10,14,18,.85);display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:0 14px;color:#cfd6d2;font-size:12px}
+.taskbar .tico{width:22px;height:22px;border-radius:5px;background:#1f5c46;display:grid;place-items:center;color:#fff;outline:2px solid #7cc9a5}
+.wizard{display:grid;grid-template-columns:170px 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.wizard aside{background:var(--brand);color:var(--brand-ink);padding:20px 16px;display:flex;flex-direction:column;gap:12px}
+.wizard aside ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px;opacity:.85}
+.wizard aside li.now{opacity:1;font-weight:600}
+.wizard .body{padding:22px 24px;display:flex;flex-direction:column;gap:12px}
+.wizard .body h4{margin:0;font-size:16px}
+.check{display:flex;gap:10px;align-items:flex-start}
+.check input{margin-top:3px;accent-color:var(--brand)}
+.check small{display:block;color:var(--ink-3)}
+.wizard .foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 24px;border-top:1px solid var(--line);background:var(--sunken)}
+
+.screen{display:none}.screen.active{display:block}
+@media (max-width:980px){
+  .app{grid-template-columns:1fr}.side{display:none}
+  .status,.two,.logwrap,.settings,.extras{grid-template-columns:1fr}
+  .facts{border-left:0;border-top:1px solid var(--line)}
+  .form-row{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){.btn,.nav a,.seg button{transition:background-color .15s ease,filter .15s ease}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/><path d="M7 15h10"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="12" rx="2"/><path d="M2 11h20M7 15h3"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-2.5h14V17"/></symbol>
+  <symbol id="i-usb" viewBox="0 0 24 24"><path d="M12 2v14M8 6l4-4 4 4M7 11v2l5 3 5-3v-3"/><circle cx="12" cy="19" r="2.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+</svg>
+
+<div class="board">
+  <div class="board-head">
+    <div>
+      <h1>Dimabe Print Bridge · panel para TI</h1>
+      <p>Maquetas para revisar. Recorre las pantallas con las pestañas; los datos son de ejemplo de un local de Los Lirios. Todo es navegable, nada está conectado.</p>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()"><svg class="i s"><use href="#i-moon"/></svg>Claro / oscuro</button>
+  </div>
+
+  <div class="screen-tabs" role="tablist" aria-label="Pantallas">
+    <button role="tab" aria-selected="true" data-s="s-estado">1 · Estado</button>
+    <button role="tab" aria-selected="false" data-s="s-impresoras">2 · Impresoras</button>
+    <button role="tab" aria-selected="false" data-s="s-bitacora">3 · Bitácora del día</button>
+    <button role="tab" aria-selected="false" data-s="s-prueba">4 · Modo prueba</button>
+    <button role="tab" aria-selected="false" data-s="s-config">5 · Configuración</button>
+    <button role="tab" aria-selected="false" data-s="s-login">6 · Entrada desde la red</button>
+    <button role="tab" aria-selected="false" data-s="s-extras">7 · Bandeja e instalador</button>
+  </div>
+
+  <!-- ============ 1 ESTADO ============ -->
+  <section class="screen active" id="s-estado">
+    <p class="note"><b>Para qué:</b> lo primero que ve TI al abrir el panel. Responde en dos segundos si el puente está funcionando y si alguna impresora tiene problemas.</p>
+    <div class="window">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="url">http://127.0.0.1:3210/panel</div></div>
+      <div class="app">
+        <aside class="side">
+          <div class="brandmark"><div class="logo"><svg class="i"><use href="#i-printer"/></svg></div><div><b>Print Bridge</b><span>CAJA-02 · Lirios Centro</span></div></div>
+          <nav class="nav">
+            <a href="#" aria-current="page"><svg class="i"><use href="#i-pulse"/></svg>Estado</a>
+            <a href="#"><svg class="i"><use href="#i-printer"/></svg>Impresoras<span class="count">1</span></a>
+            <a href="#"><svg class="i"><use href="#i-list"/></svg>Bitácora</a>
+            <a href="#"><svg class="i"><use href="#i-flask"/></svg>Modo prueba</a>
+            <a href="#"><svg class="i"><use href="#i-gear"/></svg>Configuración</a>
+          </nav>
+          <div class="side-foot"><div><span>Versión</span><span class="num">1.0.0</span></div><div><span>Windows</span><span>11 Pro</span></div></div>
+        </aside>
+        <div class="main">
+          <div class="topbar"><h2>Estado</h2><span class="sub">Actualizado hace 3 s</span><span class="spacer"></span><button class="btn"><svg class="i s"><use href="#i-refresh"/></svg>Revisar ahora</button><button class="btn primary"><svg class="i s"><use href="#i-printer"/></svg>Imprimir ticket de prueba</button></div>
+          <div class="content">
+            <div class="status">
+              <div class="status-main">
+                <div class="beacon"><svg class="i"><use href="#i-check"/></svg></div>
+                <div>
+                  <h3>El puente está atendiendo al POS</h3>
+                  <p>Escuchando en <span class="mono">127.0.0.1:3210</span> desde las 08:02. Hoy imprimió <b class="num">412</b> trabajos; <b class="num" style="color:var(--err)">3</b> fallaron, todos en <b>Cocina caliente</b>.</p>
+                  <div class="inline" style="margin-top:10px"><span class="pill ok">Servicio en línea</span><span class="pill ok">API key activa</span><span class="pill off">Modo prueba apagado</span><span class="pill warn">Panel abierto a la red</span></div>
+                </div>
+              </div>
+              <dl class="facts">
+                <div><dt>Último trabajo</dt><dd class="num">13:41:08 · Boleta</dd></div>
+                <div><dt>Tiempo medio por ticket</dt><dd class="num">0,8 s</dd></div>
+                <div><dt>Última petición rechazada</dt><dd>11:20 · sitio no permitido</dd></div>
+                <div><dt>Bitácora en disco</dt><dd class="num">37 días · 18 MB</dd></div>
+              </dl>
+            </div>
+
+            <div class="section-h"><h3>Impresoras</h3><span class="meta">4 configuradas desde el POS · revisadas hace 40 s</span><a href="#">Ver detalle</a></div>
+            <div class="tbl"><table>
+              <thead><tr><th>Impresora</th><th>Conexión</th><th>Estado</th><th class="r">Hoy</th><th>Último trabajo</th></tr></thead>
+              <tbody>
+                <tr><td><div class="target"><b>Boletas</b><small>BIXOLON SRP-275III</small></div></td><td><span class="inline"><svg class="i s"><use href="#i-usb"/></svg>USB · USB002</span></td><td><span class="pill ok">Lista</span></td><td class="r num">186</td><td class="num">13:41 · Boleta 39-118204</td></tr>
+                <tr><td><div class="target"><b>Cocina caliente</b><small>192.168.1.50:9100</small></div></td><td><span class="inline"><svg class="i s"><use href="#i-net"/></svg>Red</span></td><td><span class="pill err">No responde</span></td><td class="r num">97</td><td class="num">13:38 · falló, tiempo de espera</td></tr>
+                <tr><td><div class="target"><b>Barra</b><small>192.168.1.51:9100</small></div></td><td><span class="inline"><svg class="i s"><use href="#i-net"/></svg>Red</span></td><td><span class="pill ok">Lista</span></td><td class="r num">121</td><td class="num">13:36 · Comanda mesa 12</td></tr>
+                <tr><td><div class="target"><b>Etiquetas</b><small>ZDesigner ZD220-203dpi ZPL</small></div></td><td><span class="inline"><svg class="i s"><use href="#i-usb"/></svg>USB · USB001</span></td><td><span class="pill warn">Pausada en Windows</span></td><td class="r num">8</td><td class="num">10:05 · Etiqueta lote L-2026-881</td></tr>
+              </tbody></table></div>
+
+            <div class="two">
+              <div class="panel">
+                <h4>Trabajos por hora, hoy</h4>
+                <div class="hours" aria-label="Trabajos por hora">
+                  <div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div>
+                  <div style="height:12%"></div><div style="height:22%"></div><div style="height:30%"></div><div style="height:41%"></div><div style="height:78%"></div><div style="height:100%"></div><div style="height:6%"></div>
+                  <div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div><div style="height:0"></div>
+                </div>
+                <div class="hours-axis num"><span>0</span><span></span><span></span><span></span><span></span><span></span><span>6</span><span></span><span></span><span></span><span></span><span></span><span>12</span><span></span><span></span><span></span><span></span><span></span><span>18</span><span></span><span></span><span></span><span></span><span>23</span></div>
+                <div class="legend"><span><i style="background:var(--brand)"></i>Impresos</span><span><i style="background:var(--err)"></i>Con error</span></div>
+              </div>
+              <div class="panel">
+                <h4>Requiere atención</h4>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <div class="warnbox" style="background:var(--err-soft)"><svg class="i"><use href="#i-alert"/></svg><div><b>Cocina caliente no responde</b><br>3 comandas fallaron desde las 13:31. Revisa que esté encendida y con cable de red. <a href="#" style="color:var(--err)">Ver los 3 trabajos</a></div></div>
+                  <div class="warnbox"><svg class="i"><use href="#i-alert"/></svg><div><b>Etiquetas está pausada en Windows</b><br>Los trabajos quedan en la cola sin salir. Reanúdala en Configuración › Impresoras de Windows.</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2 IMPRESORAS ============ -->
+  <section class="screen" id="s-impresoras">
+    <p class="note"><b>Para qué:</b> ver todas las impresoras que el puente conoce: las que Windows tiene instaladas y las de red que el POS ha usado. Desde aquí se prueba cada una sin entrar al POS.</p>
+    <div class="window">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="url">http://127.0.0.1:3210/panel/impresoras</div></div>
+      <div class="main">
+        <div class="topbar"><h2>Impresoras</h2><span class="sub">Windows publica 6 · el POS usó 4 hoy</span><span class="spacer"></span><button class="btn"><svg class="i s"><use href="#i-refresh"/></svg>Volver a buscar</button></div>
+        <div class="content">
+          <div class="tbl"><table>
+            <thead><tr><th>Nombre</th><th>Tipo</th><th>Destino</th><th>Estado</th><th>Papel</th><th class="r">Hoy</th><th class="r">Errores 7 días</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><b>BIXOLON SRP-275III</b><div class="muted">Usada como Boletas</div></td><td>USB</td><td class="mono">USB002</td><td><span class="pill ok">Lista</span></td><td class="num">76 mm</td><td class="r num">186</td><td class="r num">0</td><td class="r"><div class="inline" style="justify-content:flex-end"><button class="btn">Probar texto</button><button class="btn">Abrir cajón</button></div></td></tr>
+              <tr class="sel"><td><b>Cocina caliente</b><div class="muted">Impresora de red, pos.printer</div></td><td>Red</td><td class="mono">192.168.1.50:9100</td><td><span class="pill err">No responde</span></td><td class="num">80 mm</td><td class="r num">97</td><td class="r num" style="color:var(--err)">5</td><td class="r"><div class="inline" style="justify-content:flex-end"><button class="btn">Probar conexión</button><button class="btn">Probar texto</button></div></td></tr>
+              <tr><td><b>Barra</b><div class="muted">Impresora de red, pos.printer</div></td><td>Red</td><td class="mono">192.168.1.51:9100</td><td><span class="pill ok">Lista</span></td><td class="num">80 mm</td><td class="r num">121</td><td class="r num">0</td><td class="r"><div class="inline" style="justify-content:flex-end"><button class="btn">Probar conexión</button><button class="btn">Probar texto</button></div></td></tr>
+              <tr><td><b>ZDesigner ZD220-203dpi ZPL</b><div class="muted">Usada como Etiquetas</div></td><td>USB</td><td class="mono">USB001</td><td><span class="pill warn">Pausada en Windows</span></td><td class="muted">—</td><td class="r num">8</td><td class="r num">1</td><td class="r"><div class="inline" style="justify-content:flex-end"><button class="btn">Probar etiqueta</button></div></td></tr>
+              <tr><td><b>Microsoft Print to PDF</b><div class="muted">No la usa el POS</div></td><td>Windows</td><td class="mono">PORTPROMPT:</td><td><span class="pill off">Sin uso</span></td><td class="muted">—</td><td class="r num">0</td><td class="r num">0</td><td></td></tr>
+              <tr><td><b>Bridge Virtual 80mm</b><div class="muted">Solo existe en modo prueba</div></td><td>Virtual</td><td class="mono">virtual://80mm</td><td><span class="pill test">Modo prueba</span></td><td class="num">80 mm</td><td class="r num">0</td><td class="r num">0</td><td></td></tr>
+            </tbody></table></div>
+
+          <div class="two">
+            <div class="panel">
+              <h4>Cocina caliente · diagnóstico</h4>
+              <dl class="kv">
+                <dt>Prueba de conexión</dt><dd><span class="pill err">Falló</span> <span class="num">13:42:10</span> · sin respuesta en 2 s</dd>
+                <dt>Responde a ping</dt><dd>No</dd>
+                <dt>Último éxito</dt><dd class="num">13:29:55 · Comanda mesa 7</dd>
+                <dt>Cómo la configuró el POS</dt><dd>pos.printer «Cocina caliente» · categorías Fondos, Parrilla</dd>
+              </dl>
+            </div>
+            <div class="panel">
+              <h4>Qué revisar</h4>
+              <ol style="margin:0;padding-left:18px;color:var(--ink-2);display:flex;flex-direction:column;gap:4px">
+                <li>Que la impresora esté encendida y con papel.</li>
+                <li>Que la luz del cable de red esté prendida.</li>
+                <li>Que su IP siga siendo 192.168.1.50 (imprime su hoja de configuración manteniendo FEED al encender).</li>
+                <li>Si cambió de IP, actualízala en Odoo › Punto de venta › Impresoras.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3 BITACORA ============ -->
+  <section class="screen" id="s-bitacora">
+    <p class="note"><b>Para qué:</b> saber qué hizo el puente cualquier día. Cada petición del POS queda en el SQLite con hora, quién la mandó, a qué impresora, cuánto tardó y cómo terminó. Al hacer clic en una fila se ve el detalle con los bytes enviados.</p>
+    <div class="window">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="url">http://127.0.0.1:3210/panel/bitacora?dia=2026-10-23</div></div>
+      <div class="main">
+        <div class="topbar"><h2>Bitácora</h2><span class="sub">Jueves 23 de octubre · 418 registros</span><span class="spacer"></span><button class="btn"><svg class="i s"><use href="#i-download"/></svg>Exportar CSV del día</button></div>
+        <div class="content">
+          <div class="filters">
+            <div class="field"><label for="d">Día</label><input id="d" class="input num" type="date" value="2026-10-23"></div>
+            <div class="field"><label>Resultado</label><div class="seg"><button aria-pressed="true">Todos 418</button><button aria-pressed="false">Correctos 409</button><button aria-pressed="false">Con error 3</button><button aria-pressed="false">Rechazados 6</button></div></div>
+            <div class="field"><label for="p">Impresora</label><select id="p" class="input"><option>Todas</option><option>Boletas</option><option>Cocina caliente</option><option>Barra</option><option>Etiquetas</option></select></div>
+            <div class="field"><label for="t">Documento</label><select id="t" class="input"><option>Todos</option><option>Boleta</option><option>Comanda</option><option>Etiqueta</option><option>Cajón</option></select></div>
+            <div class="field" style="flex:1;min-width:200px"><label for="q">Buscar</label><input id="q" class="input" placeholder="Texto del mensaje, IP, nombre…"></div>
+          </div>
+          <div class="logwrap">
+            <div class="tbl"><table>
+              <thead><tr><th>Hora</th><th>Acción</th><th>Destino</th><th>Origen</th><th class="r">Bytes</th><th class="r">Duración</th><th>Resultado</th></tr></thead>
+              <tbody class="num">
+                <tr><td>13:41:08</td><td>Boleta</td><td>Boletas</td><td>POS · odoo.com</td><td class="r">48 210</td><td class="r">0,62 s</td><td><span class="pill ok">Impreso</span></td></tr>
+                <tr class="sel"><td>13:38:44</td><td>Comanda</td><td>Cocina caliente</td><td>POS · odoo.com</td><td class="r">612</td><td class="r">4,00 s</td><td><span class="pill err">Tiempo de espera</span></td></tr>
+                <tr><td>13:36:20</td><td>Comanda</td><td>Barra</td><td>POS · odoo.com</td><td class="r">498</td><td class="r">0,11 s</td><td><span class="pill ok">Impreso</span></td></tr>
+                <tr><td>13:35:02</td><td>Cajón</td><td>Boletas</td><td>POS · odoo.com</td><td class="r">5</td><td class="r">0,08 s</td><td><span class="pill ok">Abierto</span></td></tr>
+                <tr><td>13:34:57</td><td>Boleta</td><td>Boletas</td><td>POS · odoo.com</td><td class="r">51 004</td><td class="r">0,70 s</td><td><span class="pill ok">Impreso</span></td></tr>
+                <tr><td>13:31:16</td><td>Comanda</td><td>Cocina caliente</td><td>POS · odoo.com</td><td class="r">540</td><td class="r">4,00 s</td><td><span class="pill err">Tiempo de espera</span></td></tr>
+                <tr><td>12:58:03</td><td>Consulta estado</td><td>—</td><td>Diagnóstico POS</td><td class="r">—</td><td class="r">0,01 s</td><td><span class="pill ok">Respondido</span></td></tr>
+                <tr><td>11:20:41</td><td>Impresión</td><td>—</td><td>tienda-xyz.com</td><td class="r">—</td><td class="r">0,00 s</td><td><span class="pill warn">Sitio no permitido</span></td></tr>
+                <tr><td>10:05:12</td><td>Etiqueta</td><td>Etiquetas</td><td>Inventario · odoo.com</td><td class="r">1 284</td><td class="r">0,21 s</td><td><span class="pill ok">Enviado a la cola</span></td></tr>
+                <tr><td>08:02:00</td><td>Inicio del servicio</td><td>—</td><td>Windows</td><td class="r">—</td><td class="r">—</td><td><span class="pill ok">En línea</span></td></tr>
+              </tbody></table></div>
+            <aside class="detail" aria-label="Detalle del registro">
+              <div class="inline"><h4>Comanda · 13:38:44</h4><span class="pill err">Tiempo de espera</span></div>
+              <dl class="kv">
+                <dt>Destino</dt><dd class="mono">192.168.1.50:9100</dd>
+                <dt>Impresora</dt><dd>Cocina caliente</dd>
+                <dt>Origen</dt><dd class="mono" style="overflow-wrap:anywhere">https://dimabe-odoo-grupo-los-lirios.odoo.com</dd>
+                <dt>Formato</dt><dd>ESC/POS directo · 612 bytes</dd>
+                <dt>Id de trabajo</dt><dd class="mono">job-7f3a91</dd>
+                <dt>Mensaje</dt><dd>No hubo conexión con 192.168.1.50:9100 en 4 s.</dd>
+              </dl>
+              <div><div class="muted" style="font-size:12px;margin-bottom:4px">Bytes enviados</div><div class="hexbox">1B 40 1B 61 01 1D 21 11 4D 45 53 41 20 31 32 0A 1D 21 00 43 6F 63 69 6E 61 20 63 61 6C 69 65 6E 74 65 0A 2D 2D 2D 2D 2D 2D 2D 2D 0A 32 20 78 20 4C 6F 6D 6F 20 76 65 74 61 0A 31 20 78 20 50 6F 6C 6C 6F 20 61 6C 20 6A 75 67 6F …</div></div>
+              <div class="inline"><button class="btn primary"><svg class="i s"><use href="#i-play"/></svg>Reenviar a la impresora</button><button class="btn">Ver como ticket</button></div>
+              <p class="help" style="margin:0">Reenviar imprime una copia; úsalo solo si cocina confirma que no salió.</p>
+            </aside>
+          </div>
+          <p class="help" style="margin:-6px 0 0">Los registros se guardan en <span class="mono">%LOCALAPPDATA%\DimabePrintBridge\bitacora.sqlite</span> y se borran solos después de los días configurados (hoy: 90).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4 MODO PRUEBA ============ -->
+  <section class="screen" id="s-prueba">
+    <p class="note"><b>Para qué:</b> probar el POS completo en un equipo sin impresoras. Mientras el modo está encendido nada sale a papel: el puente acepta los trabajos como si imprimiera, los guarda y aquí se ve cómo habría quedado cada ticket. Se pueden simular fallas para ver cómo reacciona el POS.</p>
+    <div class="window">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="url">http://127.0.0.1:3210/panel/prueba</div></div>
+      <div class="main">
+        <div class="testbanner"><svg class="i"><use href="#i-flask"/></svg>Modo prueba encendido <span>· nada se imprime en papel ni abre el cajón · desde 14:02</span><button class="btn">Apagar modo prueba</button></div>
+        <div class="topbar"><h2>Modo prueba</h2><span class="sub">17 trabajos recibidos</span><span class="spacer"></span><button class="btn">Vaciar trabajos</button></div>
+        <div class="content">
+          <div style="display:grid;grid-template-columns:280px 1fr 300px;gap:20px">
+            <div>
+              <div class="section-h" style="margin-bottom:10px"><h3>Impresoras virtuales</h3></div>
+              <div class="vprinters" style="margin-top:12px">
+                <div class="vp" aria-current="true"><svg class="i"><use href="#i-printer"/></svg><div class="meta"><b>Todas las impresoras</b><small>Captura lo que pida el POS, USB o red</small></div></div>
+                <div class="vp"><svg class="i"><use href="#i-printer"/></svg><div class="meta"><b>Boletas</b><small>76 mm · 9 trabajos</small></div></div>
+                <div class="vp"><svg class="i"><use href="#i-printer"/></svg><div class="meta"><b>Cocina caliente</b><small>80 mm · 5 trabajos</small></div></div>
+                <div class="vp"><svg class="i"><use href="#i-printer"/></svg><div class="meta"><b>Barra</b><small>80 mm · 3 trabajos</small></div></div>
+              </div>
+              <div class="section-h" style="margin:20px 0 10px"><h3>Trabajos recibidos</h3></div>
+              <div class="queue" style="margin-top:12px">
+                <button aria-current="true"><svg class="i s"><use href="#i-list"/></svg><span>Comanda · Mesa 12<br><small class="num">14:21:05 · Cocina caliente</small></span></button>
+                <button><svg class="i s"><use href="#i-list"/></svg><span>Boleta 39-000231<br><small class="num">14:19:40 · Boletas</small></span></button>
+                <button><svg class="i s"><use href="#i-cash"/></svg><span>Apertura de cajón<br><small class="num">14:19:41 · Boletas</small></span></button>
+                <button><svg class="i s"><use href="#i-list"/></svg><span>Comanda · Mesa 12<br><small class="num">14:18:02 · Barra</small></span></button>
+              </div>
+            </div>
+            <div>
+              <div class="section-h" style="margin-bottom:12px"><h3>Así habría salido</h3><span class="meta">ESC/POS interpretado · 80 mm · 48 columnas</span></div>
+              <div class="stage" style="margin-top:14px">
+                <div class="paper">
+                  <div class="c big">MESA 12</div>
+                  <div class="c">Cocina caliente</div>
+                  <hr>
+                  <div class="row"><span>Mesero: Camila R.</span><span>14:21</span></div>
+                  <div class="row"><span>Comensales: 4</span><span>#0231</span></div>
+                  <hr>
+                  <div><b>2 x Lomo vetado</b></div>
+                  <div>&nbsp;&nbsp;+ Punto medio</div>
+                  <div><b>1 x Pollo al jugo</b></div>
+                  <div><b>1 x Merluza austral</b></div>
+                  <div>&nbsp;&nbsp;Nota: sin sal</div>
+                  <hr>
+                  <div class="row"><span>4 productos</span><span>NUEVO</span></div>
+                </div>
+                <div class="cut">corte total</div>
+              </div>
+              <div class="inline" style="margin-top:12px;justify-content:center"><button class="btn">Ver bytes</button><button class="btn">Descargar imagen</button><button class="btn">Enviar a impresora real…</button></div>
+            </div>
+            <div>
+              <div class="section-h" style="margin-bottom:12px"><h3>Cómo responde el puente</h3></div>
+              <div class="panel" style="margin-top:14px;display:flex;flex-direction:column;gap:12px">
+                <div class="field"><label>Respuesta al POS</label>
+                  <select class="input"><option>Imprime bien</option><option>Sin papel</option><option>Impresora desconectada</option><option>Tarda y se pasa del tiempo de espera</option><option>Falla una de cada tres</option></select>
+                </div>
+                <div class="field"><label>Demora simulada</label>
+                  <div class="seg"><button aria-pressed="true">Ninguna</button><button aria-pressed="false">1 s</button><button aria-pressed="false">5 s</button><button aria-pressed="false">20 s</button></div>
+                </div>
+                <p class="help" style="margin:0">Sirve para ver qué mensaje muestra el POS y si ofrece reintentar sin duplicar comandas.</p>
+              </div>
+              <div class="panel" style="margin-top:14px">
+                <h4>Prueba sin POS</h4>
+                <p class="help" style="margin:0 0 10px">Manda trabajos de ejemplo al puente, como si vinieran del POS.</p>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <button class="btn test">Enviar boleta de ejemplo</button>
+                  <button class="btn">Enviar comanda de ejemplo</button>
+                  <button class="btn">Enviar etiqueta ZPL de ejemplo</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5 CONFIG ============ -->
+  <section class="screen" id="s-config">
+    <p class="note"><b>Para qué:</b> todo lo que hoy se pasa por parámetros al script. Los cambios se aplican sin reiniciar, salvo el puerto.</p>
+    <div class="window">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="url">http://127.0.0.1:3210/panel/configuracion</div></div>
+      <div class="main">
+        <div class="topbar"><h2>Configuración</h2><span class="sub">Guardado 13:02</span><span class="spacer"></span><button class="btn">Descartar</button><button class="btn primary">Guardar cambios</button></div>
+        <div class="content">
+          <div class="settings">
+            <nav><a href="#" aria-current="true">Conexión con el POS</a><a href="#">Seguridad</a><a href="#">Acceso al panel</a><a href="#">Bitácora</a><a href="#">Modo prueba</a><a href="#">Avanzado</a></nav>
+            <div>
+              <div class="group">
+                <h4>Conexión con el POS</h4>
+                <p>Debe coincidir con la «URL del puente» configurada en Odoo.</p>
+                <div class="form-row"><div class="lbl">Puerto<small>Cambiarlo reinicia el servicio</small></div><div><input class="input num" value="3210" style="width:110px"><div class="help">El POS usa http://127.0.0.1:3210</div></div></div>
+                <div class="form-row"><div class="lbl">Ancho de papel por defecto</div><div><div class="seg"><button aria-pressed="false">58 mm</button><button aria-pressed="false">76 mm</button><button aria-pressed="true">80 mm</button></div></div></div>
+              </div>
+              <div class="group">
+                <h4>Seguridad</h4>
+                <p>Quién puede pedirle cosas al puente.</p>
+                <div class="form-row"><div class="lbl">Clave API<small>La misma que en el POS</small></div><div><div class="inline"><input class="input mono" type="password" value="xxxxxxxxxxxxxxxx" style="width:260px"><button class="btn">Mostrar</button><button class="btn">Generar nueva</button></div></div></div>
+                <div class="form-row"><div class="lbl">Sitios permitidos<small>Se aceptan comodines *</small></div><div><div class="chips"><span class="chip">https://*.odoo.com<button aria-label="Quitar"><svg class="i s"><use href="#i-x"/></svg></button></span><span class="chip">http://*.localhost<button aria-label="Quitar"><svg class="i s"><use href="#i-x"/></svg></button></span><span class="chip">http://127.0.0.1:*<button aria-label="Quitar"><svg class="i s"><use href="#i-x"/></svg></button></span></div><div class="inline" style="margin-top:8px"><input class="input mono" placeholder="https://pos.midominio.cl" style="width:260px"><button class="btn">Agregar</button></div></div></div>
+                <div class="form-row"><div class="lbl">Impresoras de red<small>Puertos permitidos</small></div><div><input class="input mono" value="9100-9109" style="width:160px"><div class="help">Solo IP privadas (10.x, 172.16-31.x, 192.168.x).</div></div></div>
+              </div>
+              <div class="group">
+                <h4>Acceso al panel</h4>
+                <p>Por defecto el panel solo se abre en este equipo. Si lo abres a la red, TI puede revisarlo desde su PC con usuario y clave.</p>
+                <div class="form-row"><div class="lbl">Abrir panel a la red</div><div><span class="switch on"><i></i>Encendido</span><div class="help">Desde otra PC: http://192.168.1.23:3211/panel</div></div></div>
+                <div class="form-row"><div class="lbl">Usuario y clave del panel</div><div class="inline"><input class="input" value="ti" style="width:140px" aria-label="Usuario"><input class="input" type="password" value="xxxxxxxxxx" style="width:180px" aria-label="Clave"></div></div>
+                <div class="form-row"><div class="lbl">Redes que pueden entrar</div><div><input class="input mono" value="192.168.1.0/24" style="width:200px"></div></div>
+                <div class="warnbox"><svg class="i"><use href="#i-shield"/></svg><div>Desde la red solo se ve el panel. Las impresiones siguen aceptándose únicamente desde este equipo.</div></div>
+              </div>
+              <div class="group">
+                <h4>Bitácora</h4>
+                <p>Un registro por petición en SQLite.</p>
+                <div class="form-row"><div class="lbl">Guardar registros durante</div><div class="inline"><input class="input num" value="90" style="width:80px"><span>días</span></div></div>
+                <div class="form-row"><div class="lbl">Guardar bytes enviados<small>Para reenviar y ver el ticket</small></div><div><span class="switch on"><i></i>Sí, menos las imágenes de boleta</span><div class="help">Con imágenes la base crece unos 50 KB por boleta.</div></div></div>
+                <div class="form-row"><div class="lbl">Tamaño actual</div><div class="inline"><span class="num">18 MB · 37 días</span><button class="btn danger">Borrar bitácora…</button></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 6 LOGIN ============ -->
+  <section class="screen" id="s-login">
+    <p class="note"><b>Para qué:</b> lo que ve TI al abrir el panel de una caja desde otra PC. En la misma caja no se pide clave.</p>
+    <div class="window">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><div class="url">http://192.168.1.23:3211/panel</div></div>
+      <div class="login">
+        <form class="login-card" onsubmit="return false">
+          <div class="brandmark" style="padding:0"><div class="logo"><svg class="i"><use href="#i-lock"/></svg></div><div><b>Print Bridge</b><span>CAJA-02 · Lirios Centro</span></div></div>
+          <h3>Entrar al panel</h3>
+          <p>Estás abriendo el panel de esta caja desde la red.</p>
+          <div class="field"><label for="u">Usuario</label><input id="u" class="input" autocomplete="username" value="ti"></div>
+          <div class="field"><label for="pw">Clave</label><input id="pw" class="input" type="password" autocomplete="current-password" value="xxxxxx" aria-describedby="pwe"><div class="err" id="pwe">Clave incorrecta. Tras 5 intentos se bloquea por 10 minutos.</div></div>
+          <button class="btn primary" style="width:100%;justify-content:center;margin-top:6px">Entrar</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 7 EXTRAS ============ -->
+  <section class="screen" id="s-extras">
+    <p class="note"><b>Para qué:</b> igual que el SerialPort API: corre en segundo plano con un ícono junto al reloj, y se instala con un asistente que deja el inicio automático listo.</p>
+    <div class="extras">
+      <div>
+        <div class="section-h" style="margin-bottom:12px"><h3>Menú del ícono de la bandeja</h3></div>
+        <div class="desk" style="margin-top:14px">
+          <div class="traymenu">
+            <div class="hd"><b>Dimabe Print Bridge 1.0.0</b><span>En línea · 412 trabajos hoy · 1 impresora con problemas</span></div>
+            <div class="it"><b>Abrir panel</b></div>
+            <div class="it">Imprimir ticket de prueba</div>
+            <div class="it"><span>Modo prueba</span><span style="color:#55605a">Apagado</span></div>
+            <hr>
+            <div class="it">Abrir carpeta de bitácora</div>
+            <div class="it">Reiniciar servicio</div>
+            <hr>
+            <div class="it">Salir</div>
+          </div>
+          <div class="taskbar"><span>ESP</span><div class="tico"><svg class="i s"><use href="#i-printer"/></svg></div><span class="num">14:22</span></div>
+        </div>
+        <p class="help">El ícono cambia de color: verde en línea, ámbar si una impresora falla, morado en modo prueba.</p>
+      </div>
+      <div>
+        <div class="section-h" style="margin-bottom:12px"><h3>Instalador</h3></div>
+        <div class="wizard" style="margin-top:14px">
+          <aside><b>Instalar Dimabe Print Bridge</b><ol><li>Bienvenida</li><li>Carpeta</li><li class="now">Opciones</li><li>Instalando</li><li>Listo</li></ol></aside>
+          <div>
+            <div class="body">
+              <h4>Opciones de instalación</h4>
+              <label class="check"><input type="checkbox" checked><span>Iniciar al encender sesión en Windows<small>Crea la tarea programada «Dimabe Print Bridge», sin ventana.</small></span></label>
+              <label class="check"><input type="checkbox" checked><span>Detener y reemplazar el puente anterior (script de PowerShell)<small>Se encontró la tarea «Dimabe Print Bridge» usando dimabe_print_bridge.ps1.</small></span></label>
+              <label class="check"><input type="checkbox"><span>Abrir el panel a la red para TI<small>Se puede cambiar después en Configuración.</small></span></label>
+              <div class="field" style="max-width:360px"><label for="k">Clave API (opcional)</label><input id="k" class="input mono" placeholder="Pega la clave configurada en el POS"></div>
+              <div class="field" style="max-width:160px"><label for="pt">Puerto</label><input id="pt" class="input num" value="3210"></div>
+            </div>
+            <div class="foot"><button class="btn">Atrás</button><button class="btn primary">Instalar</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+document.querySelectorAll('.screen-tabs button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.screen-tabs button').forEach(function(x){x.setAttribute('aria-selected','false')});
+    b.setAttribute('aria-selected','true');
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active')});
+    document.getElementById(b.dataset.s).classList.add('active');
+    window.scrollTo({top:0});
+  });
+});
+function toggleTheme(){var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';}
+</script>
+</body>
+</html>
