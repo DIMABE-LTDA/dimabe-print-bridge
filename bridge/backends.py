@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import logging
 import socket
+import time
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -14,6 +15,10 @@ logger = logging.getLogger(__name__)
 CASH_DRAWER_PULSE = bytes([0x1B, 0x70, 0x00, 0x19, 0xFA])
 CONNECT_TIMEOUT_S = 3
 WRITE_TIMEOUT_S = 5
+STATUS_TIMEOUT_S = 0.5
+SILENT_STATUS_TTL_S = 3600
+DLE_EOT_OFFLINE_CAUSE = b""  # bit 0x04: tapa abierta
+DLE_EOT_PAPER = b""  # bits 0x60: sin papel
 
 PRINTER_STATUS_PAUSED = 0x1
 PRINTER_STATUS_ERROR = 0x2
@@ -63,6 +68,7 @@ class WindowsBackend:
         self.win32print = win32print
         self._win32ui = win32ui
         self.connect = connect
+        self._silent_status: dict[str, float] = {}
 
     # -- estado --------------------------------------------------------
     def queue_status(self, printer_name: str) -> str:
@@ -88,7 +94,8 @@ class WindowsBackend:
         if state == "not_found":
             raise BridgeError(f"Printer '{printer_name}' was not found in Windows.", 500)
         if state != "ok":
-            raise BridgeError(f"La impresora '{printer_name}' está {STATUS_TEXT[state]} en Windows.", 500)
+            raise BridgeError(f"La impresora '{printer_name}' está {STATUS_TEXT[state]} en Windows.", 500,
+                              code="printer_offline")
 
     def list_printers(self) -> list[dict]:
         flags = self.win32print.PRINTER_ENUM_LOCAL | self.win32print.PRINTER_ENUM_CONNECTIONS
@@ -110,7 +117,8 @@ class WindowsBackend:
     # -- envío ---------------------------------------------------------
     def send_raw(self, target: Target, data: bytes, job_name: str) -> None:
         if target.kind == "ip":
-            self._send_network(target, data)
+            ask_status = not job_name.endswith("label") and not data.lstrip().startswith(b"^XA")
+            self._send_network(target, data, ask_status=ask_status)
             return
         self._assert_ready(target.printer_name)
         wp = self.win32print
@@ -139,7 +147,32 @@ class WindowsBackend:
                 wp.EndDocPrinter(handle)
             wp.ClosePrinter(handle)
 
-    def _send_network(self, target: Target, data: bytes) -> None:
+    def _ask(self, sock, command: bytes) -> int | None:
+        sock.sendall(command)
+        try:
+            reply = sock.recv(1)
+        except (socket.timeout, TimeoutError):
+            return None
+        return reply[0] if reply else None
+
+    def _check_status(self, sock, target: Target) -> None:
+        """Pregunta sin papel / tapa abierta (ESC/POS DLE EOT) antes de mandar el trabajo."""
+        silent_since = self._silent_status.get(target.label)
+        if silent_since is not None and time.monotonic() - silent_since < SILENT_STATUS_TTL_S:
+            return
+        sock.settimeout(STATUS_TIMEOUT_S)
+        cause = self._ask(sock, DLE_EOT_OFFLINE_CAUSE)
+        if cause is None:
+            # No informa su estado (o no es ESC/POS): se imprime igual y no se pregunta por 1 h.
+            self._silent_status[target.label] = time.monotonic()
+            return
+        paper = self._ask(sock, DLE_EOT_PAPER)
+        if paper is not None and paper & 0x60:
+            raise BridgeError(f"La impresora {target.label} no tiene papel.", 500, code="printer_no_paper")
+        if cause & 0x04:
+            raise BridgeError(f"La impresora {target.label} tiene la tapa abierta.", 500, code="printer_cover_open")
+
+    def _send_network(self, target: Target, data: bytes, ask_status: bool = False) -> None:
         try:
             sock = self.connect((target.ip, target.port), timeout=CONNECT_TIMEOUT_S)
         except OSError as exc:
@@ -147,8 +180,12 @@ class WindowsBackend:
             raise BridgeError(f"No hubo conexión con {target.label}: {exc}", 500, code="printer_unreachable") from exc
         try:
             with sock:
+                if ask_status:
+                    self._check_status(sock, target)
                 sock.settimeout(WRITE_TIMEOUT_S)
                 sock.sendall(data)
+        except BridgeError:
+            raise
         except OSError as exc:
             raise BridgeError(f"Se cortó el envío a {target.label}: {exc}", 500) from exc
 
