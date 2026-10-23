@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_ORIGINS = [
     "https://*.odoo.com",
+    "https://*.grupoloslirios.cl",
     "http://*.localhost",
     "http://*.localhost:*",
     "http://localhost",

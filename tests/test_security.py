@@ -22,6 +22,7 @@ PORTS = list(range(9100, 9110))
         "https://dimabe-odoo-grupo-los-lirios.odoo.com",
         "https://dimabe-odoo-grupo-los-lirios-staging-06072026-39556733.dev.odoo.com",
         "http://lirios.localhost",
+        "https://www.gestion.grupoloslirios.cl",
         "http://localhost:8070",
         "http://127.0.0.1:3210",
         "HTTPS://Dimabe-Odoo-Grupo-Los-Lirios.odoo.com/",

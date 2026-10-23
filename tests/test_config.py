@@ -12,6 +12,7 @@ from bridge.config import (
 
 DEFAULT_ORIGINS = [
     "https://*.odoo.com",
+    "https://*.grupoloslirios.cl",
     "http://*.localhost",
     "http://*.localhost:*",
     "http://localhost",
