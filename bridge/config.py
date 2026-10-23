@@ -166,5 +166,9 @@ def apply_installer_seed(s: Settings, seed: Path) -> Settings:
     return s
 
 
+def local_token_path() -> Path:
+    return data_dir() / "local-token"
+
+
 def outbox_path() -> Path:
     return data_dir() / "cola.sqlite"

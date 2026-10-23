@@ -494,6 +494,30 @@ def create_panel_api_blueprint() -> Blueprint:
                            message=f"Trabajo de prueba reenviado a {target.label}")
         return jsonify({"result": True, "message": f"Enviado a {target.label}."})
 
+    @bp.post("/service/restart")
+    def service_restart():
+        ctx = _ctx()
+        if ctx.runner is None:
+            raise BridgeError("El servicio no se puede reiniciar desde aquí.", 409)
+        ctx.runner.restart_later()
+        return jsonify({"result": True, "message": "Reiniciando el servicio."})
+
+    @bp.post("/service/test-ticket")
+    def service_test_ticket():
+        """Ticket de prueba en la primera impresora USB conocida (lo usa la bandeja)."""
+        ctx = _ctx()
+        printers = ctx.monitor.snapshot() if ctx.monitor is not None else []
+        usb = [p["label"] for p in printers if p["kind"] == "usb"]
+        if not usb:
+            try:
+                usb = [p["Name"] for p in ctx.real.list_printers()]
+            except Exception:  # noqa: BLE001
+                usb = []
+        if not usb:
+            raise BridgeError("No hay una impresora conocida para el ticket de prueba.", 404)
+        payload = {"printer_name": usb[0], "raw_hex": test_ticket(usb[0]).hex(), "document_type": "test"}
+        return jsonify(ctx.service.print_job(payload, None, request.remote_addr, source="bandeja"))
+
     @bp.get("/queue")
     def queue_list():
         ctx = _ctx()
