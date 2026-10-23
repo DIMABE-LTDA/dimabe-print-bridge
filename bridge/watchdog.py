@@ -9,9 +9,14 @@ from typing import Callable
 logger = logging.getLogger(__name__)
 
 
-def health_check(port: int, timeout: float = 5) -> Callable[[], bool]:
+def health_check(port, api_key=lambda: "", timeout: float = 5) -> Callable[[], bool]:
+    """Consulta el propio /api/health con el puerto y la clave vigentes."""
+
     def check() -> bool:
-        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/health")
+        current_port = port() if callable(port) else port
+        key = api_key() if callable(api_key) else api_key
+        headers = {"X-Dimabe-Bridge-Key": key} if key else {}
+        request = urllib.request.Request(f"http://127.0.0.1:{current_port}/api/health", headers=headers)
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - solo loopback
             return response.status == 200
 

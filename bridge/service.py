@@ -224,7 +224,10 @@ class PrintService:
         fallback = self._fallback_target(payload)
         if fallback is not None and fallback != target:
             try:
-                return self.print_fallback(target, fallback, data, document_type, job_id, origin, client_ip, source)
+                result = self.print_fallback(target, fallback, data, document_type, job_id, origin, client_ip, source)
+                if job_id:
+                    self.outbox.remember_done(job_id, target.label, bool(settings.test_mode))
+                return result
             except BridgeError:
                 pass
         self.outbox.add(job_id or None, target, document_type, data, fallback)

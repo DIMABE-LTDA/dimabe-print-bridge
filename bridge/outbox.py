@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id TEXT, target_label TEXT NOT NULL, target TEXT NOT NULL, fallback TEXT,
     document_type TEXT, data BLOB NOT NULL, created REAL NOT NULL, next_try REAL NOT NULL,
-    attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, status TEXT NOT NULL DEFAULT 'pending'
+    attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, status TEXT NOT NULL DEFAULT 'pending',
+    lease_until REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_queue_status ON queue(status, next_try);
 CREATE TABLE IF NOT EXISTS done (
@@ -69,6 +70,9 @@ class Outbox:
         self._lock = threading.Lock()
         with self._conn() as conn:
             conn.executescript(SCHEMA)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(queue)")}
+            if "lease_until" not in columns:
+                conn.execute("ALTER TABLE queue ADD COLUMN lease_until REAL NOT NULL DEFAULT 0")
 
     @contextlib.contextmanager
     def _conn(self):
@@ -91,7 +95,7 @@ class Outbox:
                                    (job_id, target.label)).fetchone()
                 if row:
                     return row["id"]
-            count = conn.execute("SELECT COUNT(*) FROM queue WHERE target_label = ? AND status = 'pending'",
+            count = conn.execute("SELECT COUNT(*) FROM queue WHERE target_label = ? AND status IN ('pending', 'sending')",
                                  (target.label,)).fetchone()[0]
             if count >= self.max_per_target:
                 raise BridgeError(f"La cola de {target.label} está llena ({count} trabajos).", 503, code="queue_full")
@@ -109,6 +113,35 @@ class Outbox:
                                 (now,)).fetchall()
         return [QueuedJob(r["id"], r["job_id"], _target_from_json(r["target"]), _target_from_json(r["fallback"]),
                           r["document_type"] or "kitchen", r["data"], r["attempts"], r["created"]) for r in rows]
+
+    def claim_due(self, lease_s: int = 300) -> list[QueuedJob]:
+        """Reserva los trabajos vencidos para este proceso (otro proceso no los toma)."""
+        now = self.clock()
+        conn = sqlite3.connect(self.db_path, timeout=10, isolation_level=None, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("UPDATE queue SET status = 'pending' WHERE status = 'sending' AND lease_until < ?", (now,))
+            conn.execute("DELETE FROM queue WHERE status = 'expired' AND next_try < ?", (now - 86400,))
+            rows = conn.execute("SELECT * FROM queue WHERE status = 'pending' AND next_try <= ? ORDER BY id",
+                                (now,)).fetchall()
+            if rows:
+                conn.executemany("UPDATE queue SET status = 'sending', lease_until = ? WHERE id = ?",
+                                 [(now + lease_s, r["id"]) for r in rows])
+            conn.execute("COMMIT")
+        except sqlite3.Error:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+        return [QueuedJob(r["id"], r["job_id"], _target_from_json(r["target"]), _target_from_json(r["fallback"]),
+                          r["document_type"] or "kitchen", r["data"], r["attempts"], r["created"]) for r in rows]
+
+    def release(self, queue_id: int) -> None:
+        """Devuelve un trabajo reservado sin contarlo como intento."""
+        with self._lock, self._conn() as conn:
+            conn.execute("UPDATE queue SET status = 'pending', lease_until = 0 WHERE id = ? AND status = 'sending'",
+                         (queue_id,))
 
     def mark_done(self, queue_id: int, test_mode: bool = False) -> None:
         with self._lock, self._conn() as conn:
@@ -130,8 +163,8 @@ class Outbox:
                              "WHERE id = ?", (attempts, message, now, queue_id))
                 return
             wait = min(10 * 2 ** (attempts - 1), 60)
-            conn.execute("UPDATE queue SET attempts = ?, last_error = ?, next_try = ? WHERE id = ?",
-                         (attempts, message, now + wait, queue_id))
+            conn.execute("UPDATE queue SET attempts = ?, last_error = ?, next_try = ?, status = 'pending', "
+                         "lease_until = 0 WHERE id = ?", (attempts, message, now + wait, queue_id))
 
     def discard(self, queue_id: int) -> None:
         with self._lock, self._conn() as conn:
@@ -143,12 +176,12 @@ class Outbox:
 
     def is_pending(self, job_id: str, target_label: str) -> bool:
         with self._conn() as conn:
-            return conn.execute("SELECT 1 FROM queue WHERE job_id = ? AND target_label = ? AND status = 'pending'",
+            return conn.execute("SELECT 1 FROM queue WHERE job_id = ? AND target_label = ? AND status IN ('pending', 'sending')",
                                 (job_id, target_label)).fetchone() is not None
 
     def pending(self, target_label: str | None = None) -> list[dict]:
         sql = ("SELECT id, job_id, target_label, document_type, length(data) AS bytes, created, next_try, attempts, "
-               "last_error FROM queue WHERE status = 'pending'")
+               "last_error FROM queue WHERE status IN ('pending', 'sending')")
         params: tuple = ()
         if target_label:
             sql += " AND target_label = ?"
@@ -160,7 +193,7 @@ class Outbox:
         now = self.clock()
         with self._conn() as conn:
             rows = conn.execute("SELECT target_label, COUNT(*) AS n, MIN(created) AS oldest FROM queue "
-                                "WHERE status = 'pending' GROUP BY target_label").fetchall()
+                                "WHERE status IN ('pending', 'sending') GROUP BY target_label").fetchall()
         oldest = min((r["oldest"] for r in rows), default=None)
         return {"total": sum(r["n"] for r in rows), "by_target": {r["target_label"]: r["n"] for r in rows},
                 "oldest_age_s": round(now - oldest) if oldest is not None else 0}

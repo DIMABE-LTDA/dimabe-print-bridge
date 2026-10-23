@@ -9,7 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 class OutboxWorker:
-    def __init__(self, outbox, service, settings_provider: Callable, interval: float = 2):
+    def __init__(self, outbox, service, settings_provider: Callable, interval: float = 2,
+                 is_active: Callable[[], bool] = lambda: True):
+        self.is_active = is_active
         self.outbox = outbox
         self.service = service
         self.settings_provider = settings_provider
@@ -33,10 +35,19 @@ class OutboxWorker:
             self._stop.wait(self.interval)
 
     def run_once(self) -> None:
+        # Si este proceso no atiende el puerto (otra instancia lo tiene), no toca la cola.
+        if not self.is_active():
+            return
         test_mode = bool(self.settings_provider().test_mode)
-        for job in self.outbox.due():
+        failed_targets: set[str] = set()
+        for job in self.outbox.claim_due():
+            if job.target.label in failed_targets:
+                # Una impresora caída se prueba una vez por vuelta: no frena a las demás.
+                self.outbox.release(job.id)
+                continue
             printed, message = self.service.deliver_queued(job)
             if printed:
                 self.outbox.mark_done(job.id, test_mode=test_mode)
             else:
+                failed_targets.add(job.target.label)
                 self.outbox.mark_failed(job.id, message)

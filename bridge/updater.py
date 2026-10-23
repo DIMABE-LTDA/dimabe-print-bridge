@@ -29,6 +29,10 @@ DEFAULT_REPO = "DIMABE-LTDA/dimabe-print-bridge"
 WINDOW_START, WINDOW_END = 3, 5  # 03:00–05:00
 QUIET_MINUTES = 30
 CHECK_EVERY = timedelta(hours=6)
+INSTALL_GRACE = timedelta(minutes=30)
+# Con certificado propio el estado es UnknownError/NotTrusted hasta que el equipo confía en él.
+# HashMismatch (contenido alterado) y NotSigned nunca se aceptan.
+ACCEPTED_SIGNATURE_STATUS = {"Valid", "UnknownError", "NotTrusted"}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -39,6 +43,24 @@ def compare_versions(left: str, right: str) -> int:
     a += [0] * (size - len(a))
     b += [0] * (size - len(b))
     return (a > b) - (a < b)
+
+
+def app_dir() -> Path:
+    """Carpeta de instalación (Program Files): ahí vive rollback-check.ps1, fuera del alcance de los usuarios."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent / "installer"
+
+
+def fetch_release_by_tag(repo: str, tag: str) -> dict | None:
+    import requests  # noqa: PLC0415
+    try:
+        response = requests.get(f"https://api.github.com/repos/{repo}/releases/tags/{tag}",
+                                headers={"Accept": "application/vnd.github+json", "User-Agent": "dimabe-print-bridge"},
+                                timeout=15)
+    except requests.RequestException:
+        return None
+    return response.json() if response.status_code == 200 else None
 
 
 def resource_path(relative: str) -> Path:
@@ -95,10 +117,10 @@ def verify_signature(path: Path) -> tuple[str | None, str]:
 def run_installer(path: Path, version: str) -> None:
     """Programa la verificación posterior y lanza el instalador en silencio."""
     previous = path.parent / "previous.exe"
-    check = resource_path("installer/rollback-check.ps1")
+    check = app_dir() / "rollback-check.ps1"
     when = (datetime.now() + timedelta(minutes=5)).strftime("%H:%M")
     command = (f'powershell -NoProfile -ExecutionPolicy Bypass -File "{check}" -Expected {version} '
-               f'-Previous "{previous}"')
+               f'-Previous "{previous}" -Thumbprint {pinned_thumbprint()} -DataDir "{data_dir()}"')
     subprocess.run(["schtasks", "/Create", "/F", "/TN", "DimabePrintBridgeRollbackCheck", "/SC", "ONCE", "/ST", when,
                     "/RU", "SYSTEM", "/RL", "HIGHEST", "/TR", command], capture_output=True, timeout=30,
                    creationflags=NO_WINDOW)
@@ -111,7 +133,8 @@ class Updater:
     def __init__(self, settings_provider: Callable, journal, repo: str = DEFAULT_REPO, current: str = __version__,
                  pinned: str | None = None, updates_dir: Path | None = None,
                  fetch=fetch_latest_release, download=download_file, verify=verify_signature,
-                 run_installer=run_installer, clock: Callable[[], datetime] = datetime.now):
+                 run_installer=run_installer, clock: Callable[[], datetime] = datetime.now,
+                 fetch_tag=None, save: Callable | None = None):
         self.settings_provider = settings_provider
         self.journal = journal
         self.repo = repo
@@ -120,6 +143,11 @@ class Updater:
         self.updates_dir = Path(updates_dir) if updates_dir else data_dir() / "updates"
         self.fetch, self.download, self.verify, self.run_installer = fetch, download, verify, run_installer
         self.clock = clock
+        # La versión instalada se baja por etiqueta para tener a qué volver; solo con el fetch real.
+        self.fetch_tag = fetch_tag if fetch_tag is not None else (
+            fetch_release_by_tag if fetch is fetch_latest_release else None)
+        self.save = save
+        self._installing_until: datetime | None = None
         self._release: dict | None = None
         self._state = {"available": False, "latest": None, "current": current, "checked_at": None, "last_error": None}
         self._lock = threading.Lock()
@@ -154,6 +182,50 @@ class Updater:
                                available=bool(latest and self._asset() and compare_versions(latest, self.current) > 0))
         return self.state()
 
+    def _marker(self) -> Path:
+        return self.updates_dir / "pending.json"
+
+    def record_startup(self) -> None:
+        """Al arrancar: si quedó una actualización a medias y sigue la versión vieja, esa versión falló."""
+        marker = self._marker()
+        if not marker.exists():
+            return
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        version = data.get("version") or ""
+        if version and compare_versions(self.current, version) < 0:
+            settings = self.settings_provider()
+            settings.update_failed_version = version
+            if self.save is not None:
+                self.save(settings)
+            self._record("error", f"La versión {version} no quedó funcionando; se sigue con {self.current} "
+                                  "y no se volverá a instalar sola.")
+        marker.unlink(missing_ok=True)
+
+    def _ensure_previous(self) -> None:
+        """Guarda el instalador de la versión actual para poder volver a ella."""
+        previous = self.updates_dir / "previous.exe"
+        current = self.updates_dir / "current.exe"
+        if current.exists():
+            shutil.copy2(current, previous)
+            return
+        if previous.exists() or self.fetch_tag is None:
+            return
+        release = self.fetch_tag(self.repo, f"v{self.current}") or {}
+        asset = next((a for a in release.get("assets") or []
+                      if (a.get("name") or "").startswith("DimabePrintBridge-Setup") and a["name"].endswith(".exe")), None)
+        if not asset:
+            return
+        try:
+            self.download(asset["browser_download_url"], previous)
+            thumb, status = self.verify(previous)
+            if (thumb or "").upper() != self.pinned or status not in ACCEPTED_SIGNATURE_STATUS:
+                previous.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001 - sin instalador anterior igual se puede actualizar
+            previous.unlink(missing_ok=True)
+
     def _record(self, result: str, message: str) -> None:
         self.journal.record(kind="update", origin="actualizador", result=result, message=message)
 
@@ -164,6 +236,10 @@ class Updater:
             return "skipped:up_to_date"
         if state["mode"] != "auto":
             return "skipped:notify"
+        if state["latest"] and state["latest"] == getattr(self.settings_provider(), "update_failed_version", ""):
+            return "skipped:failed_before"
+        if self._installing_until and now < self._installing_until:
+            return "skipped:installing"
         if not WINDOW_START <= now.hour < WINDOW_END:
             return "skipped:outside_window"
         if self.journal.activity_since(QUIET_MINUTES):
@@ -178,22 +254,27 @@ class Updater:
             self._record("error", f"No se pudo descargar la versión {version}: {exc}")
             return "rejected:download"
         digest = asset.get("digest") or ""
+        actual = hashlib.sha256(target.read_bytes()).hexdigest()
         if digest.startswith("sha256:"):
-            actual = hashlib.sha256(target.read_bytes()).hexdigest()
             if actual != digest.split(":", 1)[1].lower():
                 target.unlink(missing_ok=True)
                 self._record("error", f"Versión {version} rechazada: el archivo no coincide con el publicado.")
                 return "rejected:hash"
         thumb, status = self.verify(target)
-        if not self.pinned or (thumb or "").upper() != self.pinned:
+        if not self.pinned or (thumb or "").upper() != self.pinned or status not in ACCEPTED_SIGNATURE_STATUS:
             target.unlink(missing_ok=True)
             self._record("error", f"Versión {version} rechazada: firma de {thumb or 'nadie'} ({status}), "
                                   "no del certificado de Dimabe.")
             return "rejected:signature"
-        current = self.updates_dir / "current.exe"
-        if current.exists():
-            shutil.copy2(current, self.updates_dir / "previous.exe")
-        shutil.copy2(target, current)
+        # Lo que se ejecuta como SYSTEM debe ser exactamente lo que se verificó.
+        if hashlib.sha256(target.read_bytes()).hexdigest() != actual:
+            target.unlink(missing_ok=True)
+            self._record("error", f"Versión {version} rechazada: el archivo cambió después de verificarlo.")
+            return "rejected:changed"
+        self._ensure_previous()
+        shutil.copy2(target, self.updates_dir / "current.exe")
+        self._marker().write_text(json.dumps({"version": version, "from": self.current}), encoding="utf-8")
+        self._installing_until = now + INSTALL_GRACE
         self._record("ok", f"Instalando la versión {version} (había {self.current}).")
         self.run_installer(target, version)
         return "installed"

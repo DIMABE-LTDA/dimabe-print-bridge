@@ -80,6 +80,7 @@ class Settings:
     remote_networks: list[str] = field(default_factory=list)
     session_secret: str = ""
     update_mode: str = "auto"
+    update_failed_version: str = ""
     installer_seed_applied: bool = False
 
 

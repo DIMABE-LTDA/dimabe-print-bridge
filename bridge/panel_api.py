@@ -528,6 +528,8 @@ def create_panel_api_blueprint() -> Blueprint:
 
     @bp.post("/queue/<int:queue_id>/retry")
     def queue_retry(queue_id: int):
+        if _ctx().outbox is None:
+            raise BridgeError("Este puente no tiene cola.", 404)
         _ctx().outbox.retry_now(queue_id)
         return jsonify({"result": True, "message": "Se reintenta en unos segundos."})
 

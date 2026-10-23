@@ -109,9 +109,11 @@ def start_core(mode: str = "all", port: int | None = None, demo: bool = False) -
     monitor = PrinterMonitor(ctx.real, ctx.journal, lambda: ctx.settings, is_busy=ctx.service.is_busy)
     ctx.monitor = monitor
     monitor.start()
-    ctx.updater = Updater(lambda: ctx.settings, ctx.journal)
+    ctx.updater = Updater(lambda: ctx.settings, ctx.journal, save=ctx.save)
+    ctx.updater.record_startup()
     ctx.updater.start()
-    worker = OutboxWorker(ctx.outbox, ctx.service, lambda: ctx.settings)
+    worker = OutboxWorker(ctx.outbox, ctx.service, lambda: ctx.settings,
+                          is_active=lambda: ctx.runner is not None and ctx.runner.state == "running")
     worker.start()
     runner = ServerRunner(ctx)
     runner.start()
@@ -122,7 +124,7 @@ def start_core(mode: str = "all", port: int | None = None, demo: bool = False) -
             os._exit(1)  # Windows reinicia el servicio (acciones de recuperación)
         runner.restart()
 
-    watchdog = Watchdog(health_check(ctx.settings.port), on_hang)
+    watchdog = Watchdog(health_check(lambda: ctx.settings.port, lambda: ctx.settings.api_key), on_hang)
     watchdog.start()
 
     stop = threading.Event()
