@@ -23,7 +23,7 @@ DEFAULT_ORIGINS = [
 
 
 def test_version():
-    assert __version__ == "1.0.0"
+    assert __version__ == "1.1.0"
 
 
 def test_data_dir_honors_env(data_dir):

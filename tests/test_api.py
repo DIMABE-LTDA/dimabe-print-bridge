@@ -59,7 +59,7 @@ def test_no_origin_health(client):
     r = client.get("/api/health", headers=HOST)
     body = r.get_json()
     assert r.status_code == 200
-    assert body["result"] is True and body["version"] == "1.0.0" and body["test_mode"] is False
+    assert body["result"] is True and body["version"] == "1.1.0" and body["test_mode"] is False
     assert body["message"] == "Dimabe Print Bridge is running."
 
 
@@ -160,7 +160,7 @@ def test_status_endpoint(client, ctx):
     r = client.get("/api/status", headers={"Origin": ODOO, **HOST})
     body = r.get_json()
     assert r.status_code == 200 and r.headers["Access-Control-Allow-Origin"] == ODOO
-    assert body["result"] is True and body["version"] == "1.0.0" and body["test_mode"] is False
+    assert body["result"] is True and body["version"] == "1.1.0" and body["test_mode"] is False
     assert body["queue"] == {"total": 0, "by_target": {}, "oldest_age_s": 0, "expired": 0}
     assert set(body["update"]) >= {"available", "latest", "mode"}
     assert isinstance(body["printers"], list) and isinstance(body["recent_errors"], dict)

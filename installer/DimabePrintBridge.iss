@@ -35,7 +35,6 @@ CloseApplications=no
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
-Name: "autostart"; Description: "Iniciar al encender sesión en Windows (sin ventana)"; GroupDescription: "Inicio automático:"
 Name: "replaceold"; Description: "Detener y reemplazar el puente anterior (script de PowerShell)"; GroupDescription: "Puente anterior:"; Check: OldBridgeExists
 Name: "remotepanel"; Description: "Abrir el panel a la red para TI (se configura la clave en el panel)"; GroupDescription: "Panel:"; Flags: unchecked
 Name: "trustcert"; Description: "Confiar en el certificado de Dimabe Ltda en este equipo"; GroupDescription: "Seguridad:"
@@ -47,10 +46,16 @@ Name: "{commonappdata}\DimabePrintBridge"; Permissions: users-modify
 Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dimabe-print-bridge.cer"; DestDir: "{app}\certificado"; Flags: ignoreversion
 Source: "instalar-certificado.ps1"; DestDir: "{app}\certificado"; Flags: ignoreversion
+Source: "servicio.ps1"; DestDir: "{app}"; Flags: ignoreversion
+
+[Registry]
+; Ícono de bandeja para cada usuario que inicie sesión (el servicio corre aparte).
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; \
+  ValueName: "DimabePrintBridgeTray"; ValueData: """{app}\{#MyAppExeName}"" --tray"; Flags: uninsdeletevalue
 
 [Icons]
 Name: "{group}\Abrir panel del Print Bridge"; Filename: "http://127.0.0.1:{code:GetPort}/panel"
-Name: "{group}\Iniciar {#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Ícono de {#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--tray"
 Name: "{group}\Desinstalar {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]
@@ -61,14 +66,15 @@ Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\certificado\instalar-certificado.ps1"""; \
   Flags: runhidden; Tasks: trustcert; StatusMsg: "Instalando el certificado de Dimabe Ltda..."
 Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$a = New-ScheduledTaskAction -Execute '{app}\{#MyAppExeName}' -WorkingDirectory '{app}'; $t = New-ScheduledTaskTrigger -AtLogOn; $p = New-ScheduledTaskPrincipal -GroupId 'S-1-5-32-545' -RunLevel Limited; $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew; Register-ScheduledTask -Force -TaskName '{#MyTaskName}' -Action $a -Trigger $t -Principal $p -Settings $s | Out-Null"""; \
-  Flags: runhidden; Tasks: autostart; StatusMsg: "Configurando el inicio automático..."
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\servicio.ps1"" -Accion instalar -Exe ""{app}\{#MyAppExeName}"""; \
+  Flags: runhidden; StatusMsg: "Registrando e iniciando el servicio..."
 Filename: "netsh.exe"; \
   Parameters: "advfirewall firewall add rule name=""Dimabe Print Bridge panel"" dir=in action=allow protocol=TCP localport=3211"; \
   Flags: runhidden; Tasks: remotepanel; StatusMsg: "Abriendo el puerto del panel en el firewall..."
-Filename: "{app}\{#MyAppExeName}"; Description: "Iniciar {#MyAppName} ahora"; Flags: nowait postinstall runasoriginaluser
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--tray"; Description: "Mostrar el ícono en la bandeja"; Flags: nowait postinstall runasoriginaluser skipifsilent
 
 [UninstallRun]
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\servicio.ps1"" -Accion quitar"; Flags: runhidden; RunOnceId: "DelService"
 Filename: "taskkill.exe"; Parameters: "/im {#MyAppExeName} /f"; Flags: runhidden; RunOnceId: "KillApp"
 Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Unregister-ScheduledTask -TaskName '{#MyTaskName}' -Confirm:$false -ErrorAction SilentlyContinue"""; \
@@ -135,7 +141,15 @@ var
 begin
   // Cerrar la instancia en ejecución antes de copiar: al actualizar, el .exe estaría en uso.
   if CurStep = ssInstall then
+  begin
+    // Detener el servicio y cerrar íconos antes de reemplazar el .exe.
+    if FileExists(ExpandConstant('{app}\servicio.ps1')) then
+      Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\servicio.ps1') + '" -Accion detener',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+    else
+      Exec(ExpandConstant('{sys}\sc.exe'), 'stop DimabePrintBridge', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(ExpandConstant('{sys}\taskkill.exe'), '/im {#MyAppExeName} /f', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
   if CurStep = ssPostInstall then
   begin
     if WizardIsTaskSelected('remotepanel') then Remote := 'true' else Remote := 'false';
