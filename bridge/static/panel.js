@@ -94,8 +94,8 @@
   const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
   const DOC = { receipt: "Boleta", kitchen: "Comanda", preparation: "Comanda", label: "Etiqueta", cashbox: "Cajón", test: "Prueba" };
-  const KIND = { health: "Consulta de estado", printers: "Lista de impresoras", service: "Servicio", config: "Configuración", rejected: "Rechazado" };
-  const RESULT = { ok: ["ok", "Correcto"], error: ["err", "Con error"], rejected: ["rejected", "Rechazado"], duplicate: ["off", "Repetido"] };
+  const KIND = { queue: "Cola", health: "Consulta de estado", printers: "Lista de impresoras", service: "Servicio", config: "Configuración", rejected: "Rechazado" };
+  const RESULT = { ok: ["ok", "Correcto"], error: ["err", "Con error"], rejected: ["rejected", "Rechazado"], duplicate: ["off", "Repetido"], queued: ["warn", "En cola"] };
 
   function actionLabel(row) {
     if (row.kind === "print" || row.kind === "cashbox") return DOC[row.document_type] || row.document_type || "Impresión";
@@ -216,7 +216,29 @@
         h("div", {}, h("b", {}, a.title), h("br"), a.detail, " ", a.link ? h("a", { href: a.link }, "Revisar") : null))) :
         [h("div", { class: "note-box ok" }, icon("i-check", "i"), h("div", {}, h("b", {}, "Todo en orden"), h("br"), "No hay errores en los últimos 30 minutos."))]));
     };
-    const refresh = poll(render, 5000);
+    const renderQueue = async () => {
+      let data;
+      try { data = await api("/panel/api/queue"); } catch (err) { return; }
+      const section = $("#cola");
+      section.hidden = !data.pending.length;
+      if (!data.pending.length) return;
+      $("#queue-meta").textContent = `${data.counts.total} esperando que vuelva su impresora · se imprimen solas`;
+      const action = (id, verb, label, confirmText) => h("button", {
+        class: "btn" + (verb === "discard" ? " danger" : ""), type: "button", onclick: async (e) => {
+          if (confirmText && !(await confirmDialog("¿Descartar este trabajo?", confirmText, "Descartar"))) return;
+          const res = await busy(e.currentTarget, () => api(`/panel/api/queue/${id}/${verb}`, { method: "POST" }));
+          if (res) { toast(res.message); renderQueue(); }
+        },
+      }, label);
+      $("#queue-body").replaceChildren(...data.pending.map((job) => h("tr", {},
+        h("td", { class: "num" }, new Date(job.created * 1000).toLocaleTimeString("es-CL")),
+        h("td", {}, job.target_label), h("td", {}, DOC[job.document_type] || job.document_type),
+        h("td", { class: "r num" }, job.attempts), h("td", {}, job.last_error || "—"),
+        h("td", { class: "r" }, h("div", { class: "inline end" },
+          action(job.id, "retry", "Reintentar ahora"),
+          action(job.id, "discard", "Descartar", "La comanda no se imprimirá. Úsalo solo si cocina ya la tiene."))))));
+    };
+    const refresh = poll(async () => { await render(); await renderQueue(); }, 5000);
     $('[data-action="refresh"]')?.addEventListener("click", refresh);
   }
 
@@ -492,6 +514,7 @@
       $("#s-rpass-state").textContent = s.remote_password_set ? "Hay una clave guardada. Escribe una nueva solo si quieres cambiarla." : "Aún no hay clave.";
       $("#s-networks").value = s.remote_networks.join(", ");
       $("#s-retention").value = s.retention_days;
+      $("#s-update").value = s.update_mode;
       $("#s-store").checked = s.store_payload;
       $("#s-store-img").checked = s.store_images;
     };
@@ -520,6 +543,7 @@
         remote_panel_enabled: $("#s-remote").checked, remote_panel_port: Number($("#s-remote-port").value),
         remote_networks: $("#s-networks").value.split(",").map((v) => v.trim()).filter(Boolean),
         retention_days: Number($("#s-retention").value), store_payload: $("#s-store").checked, store_images: $("#s-store-img").checked,
+        update_mode: $("#s-update").value,
       };
       if (body.port !== current.port && !(await confirmDialog("¿Cambiar el puerto?", `El POS dejará de encontrar el puente hasta que actualices la URL en Odoo a http://127.0.0.1:${body.port}.`, "Cambiar"))) return;
       const data = await busy(document.querySelector('button[form="settings-form"]'), () => api("/panel/api/settings", { method: "POST", body }));

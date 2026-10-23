@@ -12,7 +12,7 @@ from flask import Blueprint, Response, current_app, jsonify, redirect, request, 
 
 from bridge import __version__
 from bridge.backends import Target
-from bridge.config import TEST_DELAYS, TEST_RESPONSES
+from bridge.config import TEST_DELAYS, TEST_RESPONSES, UPDATE_MODES
 from bridge.errors import BridgeError
 from bridge.escpos import looks_like_zpl, render_escpos
 from bridge.samples import SAMPLES, test_ticket
@@ -191,7 +191,25 @@ def _attention(ctx, printers: list[dict]) -> list[dict]:
             items.append({"level": "warn", "title": f"{printer['label']}: {printer['status_text']}",
                           "detail": "Los trabajos quedan en la cola de Windows sin salir.",
                           "link": "/panel/impresoras"})
+    if ctx.outbox is not None:
+        counts = ctx.outbox.counts()
+        if counts["total"]:
+            minutes = round(counts["oldest_age_s"] / 60)
+            items.append({"level": "warn", "title": f"{counts['total']} comanda(s) en cola",
+                          "detail": f"Esperan que vuelva su impresora (la más antigua hace {minutes} min). "
+                                    "Se imprimen solas al volver.", "link": "/panel#cola"})
+        expired = ctx.outbox.expired()
+        if expired:
+            items.append({"level": "error", "title": f"{len(expired)} comanda(s) vencidas sin imprimir",
+                          "detail": "Pasaron 2 horas en cola sin que volviera la impresora. Avisa a cocina.",
+                          "link": "/panel#cola"})
     s = ctx.settings
+    updater = getattr(ctx, "updater", None)
+    if updater is not None and updater.state()["available"]:
+        state = updater.state()
+        when = "esta madrugada" if state["mode"] == "auto" else "cuando TI la instale"
+        items.append({"level": "warn", "title": f"Versión nueva disponible ({state['latest']})",
+                      "detail": f"Tienes la {state['current']}. Se instala {when}.", "link": "/panel/configuracion#actualizacion"})
     if s.test_mode:
         items.append({"level": "test", "title": "Modo prueba encendido",
                       "detail": "Nada se imprime en papel ni abre el cajón.", "link": "/panel/prueba"})
@@ -213,7 +231,7 @@ def _public_settings(s) -> dict:
         "test_mode": s.test_mode, "test_response": s.test_response, "test_delay_s": s.test_delay_s,
         "remote_panel_enabled": s.remote_panel_enabled, "remote_panel_port": s.remote_panel_port,
         "remote_user": s.remote_user, "remote_password_set": bool(s.remote_password_hash),
-        "remote_networks": s.remote_networks,
+        "remote_networks": s.remote_networks, "update_mode": s.update_mode,
     }
 
 
@@ -287,6 +305,10 @@ def _apply_settings(s, body: dict) -> list[str]:
         if body["test_response"] not in TEST_RESPONSES:
             raise BridgeError("Respuesta simulada desconocida.", 400)
         set_("test_response", body["test_response"])
+    if "update_mode" in body:
+        if body["update_mode"] not in UPDATE_MODES:
+            raise BridgeError("Modo de actualización inválido.", 400)
+        set_("update_mode", body["update_mode"])
     if "test_delay_s" in body:
         if body["test_delay_s"] not in TEST_DELAYS:
             raise BridgeError("Demora simulada inválida.", 400)
@@ -471,6 +493,52 @@ def create_panel_api_blueprint() -> Blueprint:
                            bytes=len(job.data), result="ok", http_status=200,
                            message=f"Trabajo de prueba reenviado a {target.label}")
         return jsonify({"result": True, "message": f"Enviado a {target.label}."})
+
+    @bp.post("/service/restart")
+    def service_restart():
+        ctx = _ctx()
+        if ctx.runner is None:
+            raise BridgeError("El servicio no se puede reiniciar desde aquí.", 409)
+        ctx.runner.restart_later()
+        return jsonify({"result": True, "message": "Reiniciando el servicio."})
+
+    @bp.post("/service/test-ticket")
+    def service_test_ticket():
+        """Ticket de prueba en la primera impresora USB conocida (lo usa la bandeja)."""
+        ctx = _ctx()
+        printers = ctx.monitor.snapshot() if ctx.monitor is not None else []
+        usb = [p["label"] for p in printers if p["kind"] == "usb"]
+        if not usb:
+            try:
+                usb = [p["Name"] for p in ctx.real.list_printers()]
+            except Exception:  # noqa: BLE001
+                usb = []
+        if not usb:
+            raise BridgeError("No hay una impresora conocida para el ticket de prueba.", 404)
+        payload = {"printer_name": usb[0], "raw_hex": test_ticket(usb[0]).hex(), "document_type": "test"}
+        return jsonify(ctx.service.print_job(payload, None, request.remote_addr, source="bandeja"))
+
+    @bp.get("/queue")
+    def queue_list():
+        ctx = _ctx()
+        if ctx.outbox is None:
+            return jsonify({"pending": [], "counts": {"total": 0, "by_target": {}, "oldest_age_s": 0}, "expired": []})
+        return jsonify({"pending": ctx.outbox.pending(), "counts": ctx.outbox.counts(),
+                        "expired": ctx.outbox.expired()})
+
+    @bp.post("/queue/<int:queue_id>/retry")
+    def queue_retry(queue_id: int):
+        if _ctx().outbox is None:
+            raise BridgeError("Este puente no tiene cola.", 404)
+        _ctx().outbox.retry_now(queue_id)
+        return jsonify({"result": True, "message": "Se reintenta en unos segundos."})
+
+    @bp.post("/queue/<int:queue_id>/discard")
+    def queue_discard(queue_id: int):
+        ctx = _ctx()
+        ctx.outbox.discard(queue_id)
+        ctx.journal.record(kind="queue", origin="panel", result="ok", message=f"Trabajo {queue_id} descartado de la cola")
+        return jsonify({"result": True, "message": "Trabajo descartado."})
 
     @bp.get("/settings")
     def settings_get():

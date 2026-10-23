@@ -85,3 +85,13 @@ def test_virtual_lists_seen_targets():
     backend.send_raw(USB, b"x", "job")
     assert backend.list_printers() == [{"Name": "Boletas", "DriverName": "Virtual", "PortName": "virtual://Boletas", "Type": "Virtual", "Shared": False}]
     assert backend.queue_status("Boletas") == "ok"
+
+
+@pytest.mark.parametrize("mode,code", [("no_paper", "printer_no_paper"), ("offline", "printer_unreachable"),
+                                       ("timeout", "printer_unreachable"), ("one_in_three", "printer_unreachable")])
+def test_simulated_failures_carry_printer_codes(mode, code):
+    _, backend, _ = make(test_response=mode)
+    with pytest.raises(BridgeError) as exc:
+        for _ in range(3):
+            backend.send_raw(USB, b"x", "job")
+    assert exc.value.code == code

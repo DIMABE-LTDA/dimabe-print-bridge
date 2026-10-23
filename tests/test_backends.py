@@ -117,7 +117,8 @@ def test_raw_network_sends_bytes():
     WindowsBackend(win32print=FakeWin32Print()).send_raw(Target(kind="ip", ip="127.0.0.1", port=port), b"\x1b@red", "job")
     thread.join(timeout=5)
     server.close()
-    assert received == [b"\x1b@red"]
+    # Primero pregunta el estado (DLE EOT 2); sin respuesta, imprime igual.
+    assert received[0].startswith(b"\x10\x04\x02") and received[0].endswith(b"\x1b@red")
 
 
 def test_network_connection_error_is_bridge_error():

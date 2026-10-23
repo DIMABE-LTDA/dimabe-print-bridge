@@ -13,9 +13,10 @@ from bridge.backends import Target
 from bridge.config import Settings
 from bridge.errors import BridgeError
 
+# Mismos códigos que una impresora real: así el modo prueba ejercita la cola y el respaldo.
 SIMULATED_ERRORS = {
-    "no_paper": "Sin papel (simulado).",
-    "offline": "Impresora desconectada (simulado).",
+    "no_paper": ("Sin papel (simulado).", "printer_no_paper"),
+    "offline": ("Impresora desconectada (simulado).", "printer_unreachable"),
 }
 
 
@@ -81,15 +82,16 @@ class VirtualBackend:
             self.sleep(s.test_delay_s)
         mode = s.test_response
         if mode == "timeout":
-            raise BridgeError("Tiempo de espera agotado (simulado).", 500)
+            raise BridgeError("Tiempo de espera agotado (simulado).", 500, code="printer_unreachable")
         if mode in SIMULATED_ERRORS:
-            raise BridgeError(SIMULATED_ERRORS[mode], 500)
+            message, code = SIMULATED_ERRORS[mode]
+            raise BridgeError(message, 500, code=code)
         if mode == "one_in_three":
             with self._lock:
                 self._attempts += 1
                 fail = self._attempts % 3 == 0
             if fail:
-                raise BridgeError("Falla simulada (1 de cada 3).", 500)
+                raise BridgeError("Falla simulada (1 de cada 3).", 500, code="printer_unreachable")
 
     def send_raw(self, target: Target, data: bytes, job_name: str) -> None:
         self._simulate()

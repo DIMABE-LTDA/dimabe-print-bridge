@@ -36,7 +36,7 @@ def test_local_rejects_foreign_host(local):
 def test_local_get_ok_without_login(local):
     r = local.get("/panel/api/status", headers=HOST)
     assert r.status_code == 200
-    assert r.get_json()["service"]["version"] == "1.0.0"
+    assert r.get_json()["service"]["version"] == "1.1.0"
 
 
 def test_local_post_requires_csrf(local, ctx):
