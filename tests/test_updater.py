@@ -115,3 +115,15 @@ def test_valid_update_installs(make):
     h.updater.check()
     assert h.updater.maybe_install() == "installed"
     assert h.installed == [("DimabePrintBridge-Setup-1.1.0.7.exe", "1.1.0.7")]
+
+
+@pytest.mark.skipif(not __import__("sys").platform.startswith("win"), reason="Authenticode solo en Windows")
+def test_verify_signature_reads_real_signer():
+    from pathlib import Path
+
+    from bridge.updater import verify_signature
+
+    candidates = [Path(r"C:\Windows\explorer.exe"), Path(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")]
+    thumb, status = verify_signature(next(p for p in candidates if p.exists()))
+    assert thumb and len(thumb) == 40
+    assert status in ("Valid", "UnknownError", "NotTrusted")
