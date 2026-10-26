@@ -168,7 +168,7 @@
         "."].flat(2));
       $("#status-pills").replaceChildren(...[
         h("span", { class: "pill " + (s.state === "running" ? "ok" : "err") }, s.state === "running" ? "Servicio en línea" : "Puerto ocupado"),
-        h("span", { class: "pill " + (s.api_key_set ? "ok" : "warn") }, s.api_key_set ? "Clave API activa" : "Sin clave API"),
+        h("span", { class: "pill " + (s.api_key_set ? "ok" : "off") }, s.api_key_set ? "Clave API activa" : "Sin clave API (opcional)"),
         h("span", { class: "pill " + (s.test_mode ? "test" : "off") }, s.test_mode ? "Modo prueba encendido" : "Modo prueba apagado"),
         s.remote_enabled ? h("span", { class: "pill warn" }, "Panel abierto a la red") : null].filter(Boolean));
       const last = Object.values(t.by_target).filter((v) => v.last_ts).sort((a, b) => (a.last_ts < b.last_ts ? 1 : -1))[0];
@@ -500,8 +500,8 @@
       $("#s-port-help").textContent = `El POS usa http://127.0.0.1:${s.port}`;
       $$("#s-paper button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.value) === s.default_paper_width_mm)));
       const key = $("#s-key-state");
-      key.className = "pill " + (s.api_key_set ? "ok" : "warn");
-      key.textContent = s.api_key_set ? "Clave configurada" : "Sin clave";
+      key.className = "pill " + (s.api_key_set ? "ok" : "off");
+      key.textContent = s.api_key_set ? "Clave configurada" : "Sin clave (opcional)";
       origins = [...s.allowed_origins];
       renderOrigins();
       const p = s.allowed_printer_ports;

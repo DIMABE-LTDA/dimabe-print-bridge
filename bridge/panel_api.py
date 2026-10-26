@@ -213,10 +213,7 @@ def _attention(ctx, printers: list[dict]) -> list[dict]:
     if s.test_mode:
         items.append({"level": "test", "title": "Modo prueba encendido",
                       "detail": "Nada se imprime en papel ni abre el cajón.", "link": "/panel/prueba"})
-    if not s.api_key:
-        items.append({"level": "warn", "title": "Sin clave API",
-                      "detail": "Configura una clave y ponla también en el POS.",
-                      "link": "/panel/configuracion#seguridad"})
+    # La clave API es opcional: sin ella el puente igual solo acepta los sitios permitidos.
     if s.remote_panel_enabled and not s.remote_password_hash:
         items.append({"level": "warn", "title": "Panel abierto a la red sin clave",
                       "detail": "Define usuario y clave del panel.", "link": "/panel/configuracion#acceso"})

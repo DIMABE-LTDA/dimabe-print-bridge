@@ -58,7 +58,7 @@ def test_status_attention(local, ctx):
     body = local.get("/panel/api/status", headers=HOST).get_json()
     titles = [a["title"] for a in body["attention"]]
     assert "Modo prueba encendido" in titles
-    assert "Sin clave API" in titles
+    assert "Sin clave API" not in titles  # la clave es opcional: no es un aviso
     assert body["today"]["ok"] == 1
     assert body["service"]["test_mode"] is True
 
