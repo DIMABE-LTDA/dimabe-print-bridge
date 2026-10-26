@@ -35,11 +35,14 @@ switch ($Accion) {
         $updates = Join-Path $env:ProgramData "DimabePrintBridge\updates"
         New-Item -ItemType Directory -Force -Path $updates | Out-Null
         icacls.exe $updates /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
-        $bin = "`"$Exe`" --service"
-        if ($existing) {
-            sc.exe config $name binPath= $bin start= delayed-auto DisplayName= "Dimabe Print Bridge" | Out-Null
-        } else {
-            sc.exe create $name binPath= $bin start= delayed-auto DisplayName= "Dimabe Print Bridge" | Out-Null
+        # La ruta lleva espacios y comillas: PowerShell 5.1 la parte en dos si se pasa como
+        # argumento suelto y el servicio no se crea. Como una sola cadena llega intacta.
+        $verb = if ($existing) { "config" } else { "create" }
+        $scArgs = "$verb $name binPath= `"\`"$Exe\`" --service`" start= delayed-auto DisplayName= `"Dimabe Print Bridge`""
+        $sc = Start-Process -FilePath "sc.exe" -ArgumentList $scArgs -Wait -NoNewWindow -PassThru
+        if ($sc.ExitCode -ne 0) {
+            Write-Error "sc.exe $verb terminó con código $($sc.ExitCode)."
+            exit $sc.ExitCode
         }
         sc.exe description $name "Puente local entre el POS de Odoo y las impresoras de esta caja." | Out-Null
         # Si el proceso cae, Windows lo levanta de nuevo (5 s, 5 s, 30 s; contador diario).
