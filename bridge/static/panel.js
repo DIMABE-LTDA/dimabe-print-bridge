@@ -158,13 +158,14 @@
       $("#status-title").textContent = s.test_mode ? "Modo prueba: el puente responde, pero no imprime en papel"
         : "El puente está atendiendo al POS";
       const failed = Object.entries(t.by_target).filter(([, v]) => v.error).map(([k]) => k);
-      $("#status-text").replaceChildren(
+      // replaceChildren no aplana listas anidadas: sin .flat(2) salía «[object HTMLElement]».
+      $("#status-text").replaceChildren(...[
         "Escuchando en ", h("span", { class: "mono" }, s.listen_url.replace("http://", "").replace(/\/$/, "")),
         s.since ? ` desde las ${fmtTime(s.since).slice(0, 5)}` : "", ". Hoy imprimió ",
         h("b", { class: "num" }, nf.format(t.ok)), " trabajo(s)",
         t.error ? ["; ", h("b", { class: "num", style: "color:var(--err)" }, nf.format(t.error)), " fallaron",
           failed.length ? [", en ", h("b", {}, failed.join(", "))] : ""] : "",
-        ".");
+        "."].flat(2));
       $("#status-pills").replaceChildren(...[
         h("span", { class: "pill " + (s.state === "running" ? "ok" : "err") }, s.state === "running" ? "Servicio en línea" : "Puerto ocupado"),
         h("span", { class: "pill " + (s.api_key_set ? "ok" : "warn") }, s.api_key_set ? "Clave API activa" : "Sin clave API"),
