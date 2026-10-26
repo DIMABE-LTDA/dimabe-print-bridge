@@ -63,6 +63,9 @@ def build_context(real: Backend | None = None, settings: Settings | None = None)
     provider = lambda: holder["ctx"].settings  # noqa: E731  (sigue al objeto vigente)
     virtual = VirtualBackend(captures, provider)
     outbox = Outbox(outbox_path())
+    if outbox.corrupted_backup:
+        journal.record(kind="service", result="error",
+                       message=f"La cola estaba dañada: se apartó como {outbox.corrupted_backup.name} y se creó una nueva")
     service = PrintService(provider, real, virtual, journal, outbox=outbox)
     ctx = AppContext(settings=settings, save=save_settings, journal=journal, service=service,
                      captures=captures, real=real, virtual=virtual, outbox=outbox, csrf_token=ensure_local_token())

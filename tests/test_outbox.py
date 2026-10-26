@@ -97,3 +97,12 @@ def test_discard_and_retry_now(box, clock):
     assert [j.id for j in box.due()] == [job]
     box.discard(job)
     assert box.counts()["total"] == 0
+
+
+def test_corrupted_file_is_set_aside(tmp_path, clock):
+    path = tmp_path / "cola.sqlite"
+    path.write_bytes(b"esto no es una base sqlite" * 100)
+    box = Outbox(path, clock=clock)
+    assert box.corrupted_backup is not None and box.corrupted_backup.exists()
+    box.add("j1", Target(kind="ip", ip="192.168.50.11", port=9100), "kitchen", b"x")
+    assert box.counts()["total"] == 1

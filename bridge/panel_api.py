@@ -536,6 +536,8 @@ def create_panel_api_blueprint() -> Blueprint:
     @bp.post("/queue/<int:queue_id>/discard")
     def queue_discard(queue_id: int):
         ctx = _ctx()
+        if ctx.outbox is None:
+            raise BridgeError("Este puente no tiene cola.", 404)
         ctx.outbox.discard(queue_id)
         ctx.journal.record(kind="queue", origin="panel", result="ok", message=f"Trabajo {queue_id} descartado de la cola")
         return jsonify({"result": True, "message": "Trabajo descartado."})

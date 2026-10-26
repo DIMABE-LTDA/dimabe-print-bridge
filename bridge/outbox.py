@@ -68,6 +68,22 @@ class Outbox:
         self.expire_s = expire_s
         self.done_ttl_s = done_ttl_s
         self._lock = threading.Lock()
+        try:
+            self._init_schema()
+        except sqlite3.DatabaseError:
+            # Archivo dañado (corte de luz, disco): se aparta y se empieza una cola nueva,
+            # para que el puente arranque igual. El archivo apartado queda para revisión.
+            broken = self.db_path.with_name(f"{self.db_path.stem}.danada-{int(time.time())}{self.db_path.suffix}")
+            for suffix in ("", "-wal", "-shm"):
+                part = Path(str(self.db_path) + suffix)
+                if part.exists():
+                    part.replace(Path(str(broken) + suffix))
+            self.corrupted_backup = broken
+            self._init_schema()
+
+    corrupted_backup: Path | None = None
+
+    def _init_schema(self) -> None:
         with self._conn() as conn:
             conn.executescript(SCHEMA)
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(queue)")}
