@@ -94,8 +94,8 @@
   const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
   const DOC = { receipt: "Boleta", kitchen: "Comanda", preparation: "Comanda", label: "Etiqueta", cashbox: "Cajón", test: "Prueba" };
-  const KIND = { health: "Consulta de estado", printers: "Lista de impresoras", service: "Servicio", config: "Configuración", rejected: "Rechazado" };
-  const RESULT = { ok: ["ok", "Correcto"], error: ["err", "Con error"], rejected: ["rejected", "Rechazado"], duplicate: ["off", "Repetido"] };
+  const KIND = { queue: "Cola", health: "Consulta de estado", printers: "Lista de impresoras", service: "Servicio", config: "Configuración", rejected: "Rechazado" };
+  const RESULT = { ok: ["ok", "Correcto"], error: ["err", "Con error"], rejected: ["rejected", "Rechazado"], duplicate: ["off", "Repetido"], queued: ["warn", "En cola"] };
 
   function actionLabel(row) {
     if (row.kind === "print" || row.kind === "cashbox") return DOC[row.document_type] || row.document_type || "Impresión";
@@ -158,16 +158,17 @@
       $("#status-title").textContent = s.test_mode ? "Modo prueba: el puente responde, pero no imprime en papel"
         : "El puente está atendiendo al POS";
       const failed = Object.entries(t.by_target).filter(([, v]) => v.error).map(([k]) => k);
-      $("#status-text").replaceChildren(
+      // replaceChildren no aplana listas anidadas: sin .flat(2) salía «[object HTMLElement]».
+      $("#status-text").replaceChildren(...[
         "Escuchando en ", h("span", { class: "mono" }, s.listen_url.replace("http://", "").replace(/\/$/, "")),
         s.since ? ` desde las ${fmtTime(s.since).slice(0, 5)}` : "", ". Hoy imprimió ",
         h("b", { class: "num" }, nf.format(t.ok)), " trabajo(s)",
         t.error ? ["; ", h("b", { class: "num", style: "color:var(--err)" }, nf.format(t.error)), " fallaron",
           failed.length ? [", en ", h("b", {}, failed.join(", "))] : ""] : "",
-        ".");
+        "."].flat(2));
       $("#status-pills").replaceChildren(...[
         h("span", { class: "pill " + (s.state === "running" ? "ok" : "err") }, s.state === "running" ? "Servicio en línea" : "Puerto ocupado"),
-        h("span", { class: "pill " + (s.api_key_set ? "ok" : "warn") }, s.api_key_set ? "Clave API activa" : "Sin clave API"),
+        h("span", { class: "pill " + (s.api_key_set ? "ok" : "off") }, s.api_key_set ? "Clave API activa" : "Sin clave API (opcional)"),
         h("span", { class: "pill " + (s.test_mode ? "test" : "off") }, s.test_mode ? "Modo prueba encendido" : "Modo prueba apagado"),
         s.remote_enabled ? h("span", { class: "pill warn" }, "Panel abierto a la red") : null].filter(Boolean));
       const last = Object.values(t.by_target).filter((v) => v.last_ts).sort((a, b) => (a.last_ts < b.last_ts ? 1 : -1))[0];
@@ -216,7 +217,29 @@
         h("div", {}, h("b", {}, a.title), h("br"), a.detail, " ", a.link ? h("a", { href: a.link }, "Revisar") : null))) :
         [h("div", { class: "note-box ok" }, icon("i-check", "i"), h("div", {}, h("b", {}, "Todo en orden"), h("br"), "No hay errores en los últimos 30 minutos."))]));
     };
-    const refresh = poll(render, 5000);
+    const renderQueue = async () => {
+      let data;
+      try { data = await api("/panel/api/queue"); } catch (err) { return; }
+      const section = $("#cola");
+      section.hidden = !data.pending.length;
+      if (!data.pending.length) return;
+      $("#queue-meta").textContent = `${data.counts.total} esperando que vuelva su impresora · se imprimen solas`;
+      const action = (id, verb, label, confirmText) => h("button", {
+        class: "btn" + (verb === "discard" ? " danger" : ""), type: "button", onclick: async (e) => {
+          if (confirmText && !(await confirmDialog("¿Descartar este trabajo?", confirmText, "Descartar"))) return;
+          const res = await busy(e.currentTarget, () => api(`/panel/api/queue/${id}/${verb}`, { method: "POST" }));
+          if (res) { toast(res.message); renderQueue(); }
+        },
+      }, label);
+      $("#queue-body").replaceChildren(...data.pending.map((job) => h("tr", {},
+        h("td", { class: "num" }, new Date(job.created * 1000).toLocaleTimeString("es-CL")),
+        h("td", {}, job.target_label), h("td", {}, DOC[job.document_type] || job.document_type),
+        h("td", { class: "r num" }, job.attempts), h("td", {}, job.last_error || "—"),
+        h("td", { class: "r" }, h("div", { class: "inline end" },
+          action(job.id, "retry", "Reintentar ahora"),
+          action(job.id, "discard", "Descartar", "La comanda no se imprimirá. Úsalo solo si cocina ya la tiene."))))));
+    };
+    const refresh = poll(async () => { await render(); await renderQueue(); }, 5000);
     $('[data-action="refresh"]')?.addEventListener("click", refresh);
   }
 
@@ -477,8 +500,8 @@
       $("#s-port-help").textContent = `El POS usa http://127.0.0.1:${s.port}`;
       $$("#s-paper button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.value) === s.default_paper_width_mm)));
       const key = $("#s-key-state");
-      key.className = "pill " + (s.api_key_set ? "ok" : "warn");
-      key.textContent = s.api_key_set ? "Clave configurada" : "Sin clave";
+      key.className = "pill " + (s.api_key_set ? "ok" : "off");
+      key.textContent = s.api_key_set ? "Clave configurada" : "Sin clave (opcional)";
       origins = [...s.allowed_origins];
       renderOrigins();
       const p = s.allowed_printer_ports;
@@ -492,6 +515,7 @@
       $("#s-rpass-state").textContent = s.remote_password_set ? "Hay una clave guardada. Escribe una nueva solo si quieres cambiarla." : "Aún no hay clave.";
       $("#s-networks").value = s.remote_networks.join(", ");
       $("#s-retention").value = s.retention_days;
+      $("#s-update").value = s.update_mode;
       $("#s-store").checked = s.store_payload;
       $("#s-store-img").checked = s.store_images;
     };
@@ -520,6 +544,7 @@
         remote_panel_enabled: $("#s-remote").checked, remote_panel_port: Number($("#s-remote-port").value),
         remote_networks: $("#s-networks").value.split(",").map((v) => v.trim()).filter(Boolean),
         retention_days: Number($("#s-retention").value), store_payload: $("#s-store").checked, store_images: $("#s-store-img").checked,
+        update_mode: $("#s-update").value,
       };
       if (body.port !== current.port && !(await confirmDialog("¿Cambiar el puerto?", `El POS dejará de encontrar el puente hasta que actualices la URL en Odoo a http://127.0.0.1:${body.port}.`, "Cambiar"))) return;
       const data = await busy(document.querySelector('button[form="settings-form"]'), () => api("/panel/api/settings", { method: "POST", body }));

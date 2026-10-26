@@ -6,7 +6,7 @@
 {% block content %}
 <div class="settings">
   <nav class="settings-nav" aria-label="Secciones">
-    <a href="#conexion">Conexión con el POS</a><a href="#seguridad">Seguridad</a><a href="#acceso">Acceso al panel</a><a href="#bitacora">Bitácora</a>
+    <a href="#conexion">Conexión con el POS</a><a href="#seguridad">Seguridad</a><a href="#acceso">Acceso al panel</a><a href="#actualizacion">Actualización</a><a href="#bitacora">Bitácora</a>
   </nav>
   <form id="settings-form" novalidate>
     <section class="group" id="conexion">
@@ -48,6 +48,17 @@
           <div class="help" id="s-rpass-state" role="status"></div></div></div>
       <div class="form-row"><label class="lbl" for="s-networks">Redes que pueden entrar<small>Separadas por coma</small></label>
         <div><input class="input mono" id="s-networks" placeholder="192.168.1.0/24" style="width:280px"></div></div>
+    </section>
+
+    <section class="group" id="actualizacion">
+      <h3>Actualización</h3>
+      <p>Las versiones nuevas se publican en GitHub firmadas por Dimabe Ltda. El puente solo instala instaladores con esa firma.</p>
+      <div class="form-row"><label class="lbl" for="s-update">Cuando haya versión nueva<small>Versión actual {{ version }}</small></label>
+        <div><select class="input" id="s-update">
+          <option value="auto">Instalar sola de madrugada (03:00 a 05:00, sin impresiones en 30 min)</option>
+          <option value="notify">Solo avisar</option>
+          <option value="off">No revisar</option>
+        </select></div></div>
     </section>
 
     <section class="group" id="bitacora">

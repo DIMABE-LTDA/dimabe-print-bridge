@@ -12,8 +12,9 @@ from flask import Flask
 from bridge.api import create_api_blueprint, register_api_errors
 from bridge.backends import Backend
 from bridge.capture import CaptureStore, VirtualBackend
-from bridge.config import Settings, journal_path, load_settings, save_settings
+from bridge.config import Settings, journal_path, load_settings, local_token_path, outbox_path, save_settings
 from bridge.journal import Journal
+from bridge.outbox import Outbox
 from bridge.panel_api import create_auth_blueprint, create_panel_api_blueprint
 from bridge.service import PrintService
 
@@ -30,9 +31,24 @@ class AppContext:
     captures: CaptureStore
     real: Backend
     virtual: VirtualBackend
+    outbox: Outbox | None = None
+    updater: object | None = None
     monitor: object | None = None
     runner: object | None = None
     csrf_token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
+
+
+def ensure_local_token() -> str:
+    """Token del panel local, compartido por el servicio y la bandeja (archivo en ProgramData)."""
+    path = local_token_path()
+    try:
+        token = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        token = ""
+    if len(token) < 32:
+        token = secrets.token_urlsafe(32)
+        path.write_text(token, encoding="utf-8")
+    return token
 
 
 def build_context(real: Backend | None = None, settings: Settings | None = None) -> AppContext:
@@ -46,9 +62,13 @@ def build_context(real: Backend | None = None, settings: Settings | None = None)
     holder: dict = {}
     provider = lambda: holder["ctx"].settings  # noqa: E731  (sigue al objeto vigente)
     virtual = VirtualBackend(captures, provider)
-    service = PrintService(provider, real, virtual, journal)
+    outbox = Outbox(outbox_path())
+    if outbox.corrupted_backup:
+        journal.record(kind="service", result="error",
+                       message=f"La cola estaba dañada: se apartó como {outbox.corrupted_backup.name} y se creó una nueva")
+    service = PrintService(provider, real, virtual, journal, outbox=outbox)
     ctx = AppContext(settings=settings, save=save_settings, journal=journal, service=service,
-                     captures=captures, real=real, virtual=virtual)
+                     captures=captures, real=real, virtual=virtual, outbox=outbox, csrf_token=ensure_local_token())
     holder["ctx"] = ctx
     return ctx
 

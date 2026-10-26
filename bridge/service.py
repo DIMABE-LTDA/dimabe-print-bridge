@@ -19,6 +19,10 @@ LOCK_TIMEOUT_S = 10
 # Más grande que esto no se guarda en la bitácora (una boleta rasterizada pesa ~200 KB).
 MAX_STORED_PAYLOAD = 64 * 1024
 MAX_STORED_PAYLOAD_TEST = 2 * 1024 * 1024
+# Solo las comandas esperan en cola: una boleta que sale una hora después confunde al cliente.
+QUEUEABLE_DOCUMENTS = {"kitchen", "preparation"}
+# Fallas de la impresora (no de configuración): vale la pena reintentar o usar el respaldo.
+QUEUEABLE_CODES = {"printer_unreachable", "printer_no_paper", "printer_cover_open", "printer_offline"}
 _HEX_JUNK = re.compile(r"[^0-9A-Fa-f]")
 
 
@@ -47,8 +51,9 @@ def _filled(payload: dict, key: str) -> str:
 class PrintService:
     def __init__(self, settings_provider: Callable[[], Settings], real: Backend, virtual: Backend,
                  journal: Journal, clock: Callable[[], float] = time.monotonic,
-                 lock_timeout: float = LOCK_TIMEOUT_S):
+                 lock_timeout: float = LOCK_TIMEOUT_S, outbox=None):
         self.settings_provider = settings_provider
+        self.outbox = outbox
         self.lock_timeout = lock_timeout
         self.real = real
         self.virtual = virtual
@@ -108,6 +113,8 @@ class PrintService:
                 del self._done_jobs[old]
             if key in self._done_jobs or key in self._in_flight:
                 return False
+            if self.outbox is not None and self.outbox.was_done(key[0], key[1], key[2]):
+                return False
             self._in_flight.add(key)
             return True
 
@@ -118,6 +125,9 @@ class PrintService:
             self._in_flight.discard(key)
             if done:
                 self._done_jobs[key] = self.clock()
+        if done and self.outbox is not None:
+            # Persistente 24 h: un reintento del POS tras reiniciar el puente no reimprime.
+            self.outbox.remember_done(key[0], key[1], key[2])
 
     # -- ejecución común -----------------------------------------------
     def _run(self, *, kind: str, target: Target, document_type: str, origin, client_ip, source,
@@ -198,9 +208,81 @@ class PrintService:
         else:
             action = lambda b: b.print_image(target, data, paper, job_name)  # noqa: E731
             message = f"Printed on '{target.label}'."
-        return self._run(kind="print", target=target, document_type=document_type, origin=origin,
-                         client_ip=client_ip, source=source, payload_kind=payload_kind, data=data,
-                         job_id=job_id, action=action, success_message=message)
+
+        queueable = (self.outbox is not None and payload_kind == "raw"
+                     and document_type in QUEUEABLE_DOCUMENTS and payload.get("queue_on_failure") is not False)
+        if queueable and job_id and self.outbox.is_pending(job_id, target.label):
+            return self._queued_response(target, settings)
+        try:
+            return self._run(kind="print", target=target, document_type=document_type, origin=origin,
+                             client_ip=client_ip, source=source, payload_kind=payload_kind, data=data,
+                             job_id=job_id, action=action, success_message=message)
+        except BridgeError as exc:
+            if not queueable or exc.code not in QUEUEABLE_CODES:
+                raise
+            failure = exc
+        fallback = self._fallback_target(payload)
+        if fallback is not None and fallback != target:
+            try:
+                result = self.print_fallback(target, fallback, data, document_type, job_id, origin, client_ip, source)
+                if job_id:
+                    self.outbox.remember_done(job_id, target.label, bool(settings.test_mode))
+                return result
+            except BridgeError:
+                pass
+        self.outbox.add(job_id or None, target, document_type, data, fallback)
+        self.journal.record(kind="queue", document_type=document_type, target_label=target.label,
+                            target_kind=target.kind, origin=origin if source == "api" else source,
+                            client_ip=client_ip, bytes=len(data), job_id=job_id or None, result="queued",
+                            http_status=200, message=f"En cola: {failure.message}",
+                            test_mode=settings.test_mode)
+        return self._queued_response(target, settings)
+
+    def deliver_queued(self, job) -> tuple[bool, str]:
+        """Intenta imprimir un trabajo de la cola. Devuelve (impreso, mensaje de error)."""
+        job_name = f"Dimabe {job.document_type}"
+        try:
+            self._run(kind="queue", target=job.target, document_type=job.document_type, origin="cola",
+                      client_ip="127.0.0.1", source="cola", payload_kind="raw", data=job.data,
+                      job_id=job.job_id or "", action=lambda b: b.send_raw(job.target, job.data, job_name),
+                      success_message=f"Impreso desde la cola en {job.target.label}.")
+            return True, ""
+        except BridgeError as exc:
+            if job.fallback is None or exc.code not in QUEUEABLE_CODES:
+                return False, exc.message
+            try:
+                self.print_fallback(job.target, job.fallback, job.data, job.document_type, job.job_id or "",
+                                    "cola", "127.0.0.1", source="cola")
+                return True, ""
+            except BridgeError as fallback_exc:
+                return False, f"{exc.message} Respaldo: {fallback_exc.message}"
+
+    def _queued_response(self, target: Target, settings: Settings) -> dict:
+        return {"result": True, "status": "queued", "queued": True, "test_mode": settings.test_mode,
+                "message": f"La impresora {target.label} no responde: el trabajo quedó en cola y se "
+                           "imprimirá cuando vuelva."}
+
+    def _fallback_target(self, payload: dict) -> Target | None:
+        fallback = payload.get("fallback_target")
+        if not isinstance(fallback, dict):
+            return None
+        try:
+            return self.parse_target(fallback)
+        except BridgeError:
+            return None
+
+    def print_fallback(self, target: Target, fallback: Target, data: bytes, document_type: str,
+                       job_id: str, origin, client_ip, source: str = "api") -> dict:
+        """Imprime en la impresora de respaldo con una cabecera que dice de dónde venía."""
+        banner = (b"\x1b@\x1ba\x01\x1bE\x01" + f"RESPALDO DE {target.label}".encode("ascii", "replace")
+                  + b"\n\x1bE\x00\x1ba\x00")
+        job_name = f"Dimabe {document_type}"
+        result = self._run(kind="print", target=fallback, document_type=document_type, origin=origin,
+                           client_ip=client_ip, source=source, payload_kind="raw", data=banner + data,
+                           job_id=job_id, action=lambda b: b.send_raw(fallback, banner + data, job_name),
+                           success_message=f"{target.label} no responde: impreso en el respaldo {fallback.label}.")
+        result["fallback_used"] = True
+        return result
 
     def cashbox(self, payload: dict, origin: str | None, client_ip: str, source: str = "api") -> dict:
         target = self.parse_target(payload)

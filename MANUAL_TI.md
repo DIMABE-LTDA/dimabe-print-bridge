@@ -91,3 +91,12 @@ Antes de dar por buena una caja (o una versión nueva), en una caja con BIXOLON 
 - [ ] Modo prueba: nada sale en papel; al apagarlo vuelve a imprimir.
 - [ ] Reiniciar Windows: el puente arranca solo al iniciar sesión.
 - [ ] Panel desde otra PC con usuario y clave.
+
+## 8. Novedades de la versión 1.1 (resiliencia)
+
+- **Servicio de Windows.** El puente corre como servicio «Dimabe Print Bridge»: arranca con el equipo aunque nadie inicie sesión, y Windows lo levanta de nuevo si se cae. El ícono de la bandeja es aparte: si lo cierras, el puente sigue funcionando. Un vigilante interno reinicia el servicio si deja de responder.
+- **Cola de comandas.** Si una impresora de cocina no responde, no tiene papel o tiene la tapa abierta, la comanda queda en cola y se imprime sola cuando vuelve. El POS recibe «en cola», sin error, y el puente no la imprime dos veces. Se ve en Estado › *Cola de impresión*, con «Reintentar ahora» y «Descartar». A las 2 h sin imprimir vence y se avisa. Las boletas no se encolan.
+- **Impresora de respaldo.** Si en Odoo la impresora tiene un respaldo configurado, la comanda sale ahí con la cabecera «RESPALDO DE …».
+- **Estado real.** Antes de mandar una comanda a una impresora de red, el puente le pregunta si tiene papel y la tapa cerrada (ESC/POS `DLE EOT`).
+- **Actualización.** En Configuración › Actualización: *Instalar sola de madrugada* (por defecto, entre 03:00 y 05:00, sin impresiones en 30 min), *Solo avisar* o *No revisar*. Solo instala instaladores firmados por el certificado de Dimabe Ltda. Si la versión nueva no responde a los 5 minutos, vuelve sola a la anterior.
+- **Para el POS.** `GET /api/status` informa versión, cola, impresoras y si hay actualización. El POS lo usa para su indicador y para informar a Odoo («Estado de cajas»).

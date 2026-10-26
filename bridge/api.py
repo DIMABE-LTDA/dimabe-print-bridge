@@ -97,6 +97,29 @@ def create_api_blueprint() -> Blueprint:
             "test_mode": ctx.settings.test_mode,
         })
 
+    @bp.route("/status", methods=["GET", "OPTIONS"])
+    def status():
+        """Estado completo para el indicador del POS y el latido hacia Odoo."""
+        ctx = _ctx()
+        if ctx.outbox is not None:
+            queue = {**ctx.outbox.counts(), "expired": len(ctx.outbox.expired())}
+        else:
+            queue = {"total": 0, "by_target": {}, "oldest_age_s": 0, "expired": 0}
+        updater = getattr(ctx, "updater", None)
+        update = updater.state() if updater is not None else {
+            "available": False, "latest": None, "mode": getattr(ctx.settings, "update_mode", "auto")}
+        printers = ctx.monitor.snapshot() if ctx.monitor is not None else []
+        return jsonify({
+            "result": True,
+            "status": "success",
+            "version": __version__,
+            "test_mode": ctx.settings.test_mode,
+            "update": update,
+            "queue": queue,
+            "printers": printers,
+            "recent_errors": ctx.journal.recent_errors(30),
+        })
+
     @bp.route("/printers", methods=["GET", "OPTIONS"])
     def printers():
         ctx = _ctx()

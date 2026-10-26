@@ -24,11 +24,14 @@ Ver [MANUAL_TI.md](MANUAL_TI.md).
 | `GET /api/printers` | Impresoras de Windows (más las virtuales en modo prueba) |
 | `POST /api/print` | `printer_name` **o** `ip_address`+`ip_port`; contenido `raw_base64`, `raw_hex` o `receipt` (imagen, solo USB) |
 | `POST /api/cashbox` | Pulso del cajón `ESC p 0 25 250` |
+| `GET /api/status` | Versión, cola, impresoras, errores recientes y actualización (para el indicador del POS) |
 
 Seguridad: solo atiende a sitios permitidos (`*.odoo.com`, `*.grupoloslirios.cl`,
 localhost), clave API opcional en `X-Dimabe-Bridge-Key`, e impresoras de red solo
-con IPv4 privada y puertos 9100-9109. Cuerpo máximo 20 MB. Un `job_id` repetido
-dentro de 5 minutos no se vuelve a imprimir.
+con IPv4 privada y puertos 9100-9109. Cuerpo máximo 20 MB. Un `job_id` ya impreso
+no se vuelve a imprimir durante 24 h. Las comandas (`kitchen`/`preparation`) cuya
+impresora no responde van a la impresora de respaldo (`fallback_target`) o a una cola
+persistente que se reintenta sola.
 
 ## Panel para TI
 
