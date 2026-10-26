@@ -47,6 +47,7 @@ Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dimabe-print-bridge.cer"; DestDir: "{app}\certificado"; Flags: ignoreversion
 Source: "instalar-certificado.ps1"; DestDir: "{app}\certificado"; Flags: ignoreversion
 Source: "servicio.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "rollback-check.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
 ; Ícono de bandeja para cada usuario que inicie sesión (el servicio corre aparte).

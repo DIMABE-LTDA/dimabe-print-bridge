@@ -6,7 +6,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[("bridge/templates", "bridge/templates"), ("bridge/static", "bridge/static"),
-           ("installer/cert-thumbprint.txt", "installer"), ("installer/rollback-check.ps1", "installer")],
+           ("installer/cert-thumbprint.txt", "installer")],
     hiddenimports=["waitress", "pystray._win32", "win32timezone", "servicemanager", "win32serviceutil", "win32service", "win32event"],
     hookspath=[],
     hooksconfig={},

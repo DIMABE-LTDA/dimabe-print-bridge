@@ -30,6 +30,11 @@ switch ($Accion) {
         Stop-Bridge
         # La 1.0 arrancaba con una tarea programada al iniciar sesión: la reemplaza el servicio.
         Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+        # Los instaladores descargados se ejecutan como SYSTEM: solo SYSTEM y administradores
+        # pueden escribir en esa carpeta (un usuario de la caja no puede cambiarlos).
+        $updates = Join-Path $env:ProgramData "DimabePrintBridge\updates"
+        New-Item -ItemType Directory -Force -Path $updates | Out-Null
+        icacls.exe $updates /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
         $bin = "`"$Exe`" --service"
         if ($existing) {
             sc.exe config $name binPath= $bin start= delayed-auto DisplayName= "Dimabe Print Bridge" | Out-Null
