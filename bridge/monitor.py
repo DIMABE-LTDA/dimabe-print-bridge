@@ -16,6 +16,14 @@ QUEUE_TEXT = {
     "error": ("error", "Con error en Windows"),
     "not_found": ("error", "No existe en Windows"),
 }
+STUCK_TEXT = ("warn", "Trabajo atascado en Windows")
+
+
+def windows_state(real, printer_name: str) -> tuple[str, str]:
+    state = real.queue_status(printer_name)
+    if state == "ok" and getattr(real, "stuck_jobs", lambda _name: 0)(printer_name):
+        return STUCK_TEXT
+    return QUEUE_TEXT.get(state, ("off", "Desconocido"))
 
 
 class PrinterMonitor:
@@ -65,7 +73,7 @@ class PrinterMonitor:
             except (OSError, ValueError):
                 return "error", "No responde"
         try:
-            return QUEUE_TEXT.get(self.real.queue_status(label), ("off", "Desconocido"))
+            return windows_state(self.real, label)
         except Exception:  # noqa: BLE001
             return "off", "Desconocido"
 

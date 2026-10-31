@@ -251,8 +251,22 @@
         if (!(await confirmDialog("¿Probar la impresora?", `${paper} en ${target.printer_name || target.ip_address}.`, "Probar"))) return;
       }
       const data = await busy(button, () => api("/panel/api/printers/test", { method: "POST", body: { target, kind } }));
-      if (data) toast(data.message);
+      if (data) toast(kind === "text" ? `${data.message} Revisa que el ticket haya salido en papel.` : data.message);
       return data;
+    };
+    const openHelp = () => { $("#ayuda-otro-equipo").open = true; };
+    const CHECK_PILL = { true: ["ok", "Bien"], false: ["err", "Revisar"], null: ["warn", "Por confirmar"] };
+    const diagnose = async (button, name) => {
+      const data = await busy(button, () => api("/panel/api/printers/diagnose", { method: "POST", body: { printer_name: name } }));
+      if (!data) return;
+      const box = $("#diagnosis");
+      $("#diagnosis-title").textContent = `Diagnóstico de ${data.printer}`;
+      $("#diagnosis-body").replaceChildren(...data.checks.map((c) => {
+        const [pill, text] = CHECK_PILL[c.ok];
+        return h("li", {}, h("span", { class: "pill " + pill }, text), h("div", {}, h("b", {}, c.title), h("div", { class: "muted" }, c.detail)));
+      }));
+      box.hidden = false;
+      box.scrollIntoView({ block: "nearest" });
     };
     const load = async () => {
       let data;
@@ -269,7 +283,7 @@
           h("td", {}, p ? printerStatus(p) : h("span", { class: "pill off" }, "Sin uso hoy")),
           h("td", { class: "r num" }, p ? nf.format(p.today_ok) : "0"), h("td", { class: "r num" }, p ? nf.format(p.today_error) : "0"),
           h("td", { class: "r" }, h("div", { class: "inline end" },
-            h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "connection") }, "Estado"),
+            h("button", { class: "btn", type: "button", onclick: (e) => diagnose(e.currentTarget, w.Name) }, "Diagnosticar"),
             h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "text") }, "Probar texto"),
             h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "cashbox") }, "Abrir cajón")))));
       }
@@ -277,11 +291,14 @@
         const [ip, port] = p.label.split(":");
         const target = p.kind === "ip" ? { ip_address: ip, ip_port: Number(port) } : { printer_name: p.label };
         rows.push(h("tr", {},
-          h("td", {}, h("b", {}, p.label), h("div", { class: "muted" }, p.kind === "ip" ? "Impresora de red usada por el POS" : "Usada por el POS")),
+          h("td", {}, h("b", {}, p.label), h("div", { class: "muted" }, p.kind === "ip" ? "Impresora de red usada por el POS" : "Usada por el POS"),
+            p.hint ? h("div", { class: "err" }, p.hint, " ", h("a", { href: "#ayuda-otro-equipo", onclick: openHelp }, "Ver cómo resolverlo")) : null),
           h("td", {}, p.kind === "ip" ? "Red" : "USB"), h("td", { class: "mono" }, p.label),
           h("td", {}, printerStatus(p)), h("td", { class: "r num" }, nf.format(p.today_ok)), h("td", { class: "r num" }, nf.format(p.today_error)),
           h("td", { class: "r" }, h("div", { class: "inline end" },
-            h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "connection") }, "Probar conexión"),
+            p.kind === "ip"
+              ? h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "connection") }, "Probar conexión")
+              : h("button", { class: "btn", type: "button", onclick: (e) => diagnose(e.currentTarget, p.label) }, "Diagnosticar"),
             h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "text") }, "Probar texto")))));
       }
       $("#printers-body").replaceChildren(...(rows.length ? rows : [h("tr", {}, h("td", { colspan: 7, class: "empty" }, "Windows no informa impresoras y el POS aún no ha usado ninguna de red."))]));
@@ -294,6 +311,7 @@
       $("#ip-test-result").textContent = data ? data.message : "";
     });
     $('[data-action="refresh"]').addEventListener("click", load);
+    $("#diagnosis-help").addEventListener("click", openHelp);
     load();
   }
 

@@ -11,6 +11,12 @@
   </table>
 </div>
 
+<section class="panel" id="diagnosis" role="status" hidden>
+  <h3 class="h4" id="diagnosis-title">Diagnóstico</h3>
+  <ul class="checks" id="diagnosis-body"></ul>
+  <p class="help"><a href="#ayuda-otro-equipo" id="diagnosis-help">Ver los pasos y casos frecuentes</a></p>
+</section>
+
 <section class="panel">
   <h3 class="h4">Probar una impresora de red que no aparece</h3>
   <p class="help">Escribe la IP de la impresora tal como está configurada en Odoo.</p>
@@ -32,4 +38,42 @@
     <li>Si cambió de IP o de nombre, actualízala en Odoo › Punto de venta › Configuración.</li>
   </ol>
 </section>
+
+<details class="panel help-block" id="ayuda-otro-equipo">
+  <summary class="h4">La impresora está conectada a otro equipo</summary>
+  <p class="intro">El POS imprime por el puente del equipo donde se está usando, y ese puente busca la impresora en el Windows de ese mismo equipo. Por eso cada equipo necesita su propia impresora en Windows, con el nombre exacto que tiene en Odoo, aunque físicamente sea la misma.</p>
+
+  <h4 class="h5">En el equipo que tiene la impresora</h4>
+  <ol class="steps">
+    <li>En Configuración de Windows › Impresoras, abre la impresora y entra a Propiedades de impresora › Uso compartido. Marca «Compartir esta impresora» y anota el nombre compartido.</li>
+    <li>En este panel de ese equipo, anota el nombre del equipo (arriba a la izquierda) y el driver (bajo el nombre de la impresora).</li>
+  </ol>
+
+  <h4 class="h5">En cada uno de los otros equipos</h4>
+  <ol class="steps">
+    <li>Agrega una impresora: «La impresora que deseo no está en la lista» › «Agregar una impresora local o de red con configuración manual».</li>
+    <li>Elige «Crear un nuevo puerto» › «Local Port» y escribe <code class="mono">\\NOMBRE-DEL-EQUIPO\NOMBRE-COMPARTIDO</code>.</li>
+    <li>Instala el mismo driver que tiene el otro equipo.</li>
+    <li>Ponle el nombre exacto que tiene en Odoo y no la compartas.</li>
+    <li>Vuelve a este panel, pulsa «Volver a buscar» y luego «Diagnosticar», que revisa la instalación, el estado y la red.</li>
+    <li>Pulsa «Probar texto». Confirma que el ticket salga en papel: Windows puede aceptar el trabajo sin lograr entregarlo. La página de prueba de Windows no sirve para esto, porque usa tu usuario y el puente no.</li>
+    <li>Termina con una precuenta real desde el POS, porque se imprime como imagen y usa el driver.</li>
+  </ol>
+
+  <h4 class="h5">Casos frecuentes</h4>
+  <div class="tbl flat">
+    <table>
+      <thead><tr><th scope="col">Qué ves</th><th scope="col">Qué significa</th><th scope="col">Qué hacer</th></tr></thead>
+      <tbody>
+        <tr><td>«No existe en Windows»</td><td>Este equipo no tiene una impresora con ese nombre exacto.</td><td>Créala con los pasos de arriba. Si ya existe, compara el nombre letra por letra con Odoo, incluidos los espacios.</td></tr>
+        <tr><td>Windows la muestra como <code class="mono">\\EQUIPO\IMPRESORA</code> o «en EQUIPO»</td><td>Se agregó como impresora compartida: el nombre no coincide con Odoo y el puente puede no verla, porque esa conexión es de tu usuario.</td><td>Créala con el puerto local de los pasos de arriba.</td></tr>
+        <tr><td>«Windows no pudo entregar el trabajo», «Trabajo atascado en Windows», o «Probar texto» dice que salió bien y no hay papel</td><td>Windows aceptó el trabajo y no logra entregarlo. Con una impresora de otro equipo, la causa más común es el acceso: el puente corre con la cuenta del sistema y no usa las credenciales guardadas de tu usuario.</td><td>Cancela los trabajos que queden en la cola de esa impresora. Luego pide a TI que esa cuenta pueda imprimir en la impresora compartida, o conecta la impresora por red.</td></tr>
+        <tr><td>«Probar texto» sale, pero la precuenta no sale o sale mal</td><td>El driver de este equipo no es el mismo del otro.</td><td>Instala el mismo driver y revisa que el ancho de papel sea igual.</td></tr>
+        <tr><td>«Probar texto» y la precuenta salen desde el panel, pero el POS sigue con error</td><td>El POS cargó la configuración antes del cambio, o el nombre en Odoo es distinto.</td><td>Recarga el POS con Ctrl+Shift+R y compara el nombre con el de Odoo.</td></tr>
+        <tr><td>No se puede crear el puerto o no abre <code class="mono">\\EQUIPO</code></td><td>Este equipo no llega al otro por la red.</td><td>Revisa que esté encendido, en la misma red y con «Compartir archivos e impresoras» activo. Prueba con su IP y, si funciona, déjale una IP fija.</td></tr>
+        <tr><td>Dejó de imprimir de un momento a otro</td><td>El equipo que tiene la impresora está apagado o perdió la red.</td><td>Sin ese equipo no sale nada desde los demás. Si no puede quedar siempre encendido, conecta la impresora por red.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
 {% endblock %}

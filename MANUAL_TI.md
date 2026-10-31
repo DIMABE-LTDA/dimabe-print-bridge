@@ -74,8 +74,35 @@ Tras 5 claves incorrectas, esa IP queda bloqueada 10 minutos.
 | Impresora de red «No responde» | Encendida, cable, IP igual a la de Odoo (hoja de configuración con FEED al encender). |
 | USB «Pausada / Sin conexión en Windows» | Configuración de Windows › Impresoras › reanudar o poner en línea. |
 | Comanda impresa dos veces | Bitácora: si figura «Repetido», el puente evitó el duplicado; si no, revisar reintentos en el POS. |
+| USB «No existe en Windows» | Ese equipo no tiene una impresora con el nombre exacto de Odoo. Ver «Impresora conectada a otro equipo». |
 
 Logs de texto: `C:\ProgramData\DimabePrintBridge\logs\bridge.log`.
+
+### Impresora conectada a otro equipo
+
+El POS imprime por el puente del equipo donde se usa (`127.0.0.1`), y ese puente busca
+la impresora en su propio Windows. Para imprimir desde otro equipo en una impresora USB
+compartida, ese equipo necesita una impresora local con el nombre exacto de Odoo y un
+puerto `Local Port` que apunte a `\\EQUIPO\COMPARTIDA`, con el mismo driver. Los pasos y
+los casos frecuentes están en el panel, en Impresoras › «La impresora está conectada a
+otro equipo».
+
+No uses la conexión normal a una impresora compartida: queda con el nombre
+`\\EQUIPO\COMPARTIDA` y pertenece al usuario de Windows. El puente corre como servicio con
+la cuenta del sistema, así que tampoco usa las credenciales guardadas del usuario. Por eso
+la prueba válida es «Probar texto» en el panel, no la página de prueba de Windows, y hay
+que confirmar que el ticket salga en papel: Windows puede aceptar el trabajo sin entregarlo.
+
+Si un trabajo lleva más de 2 minutos en la cola o Windows lo marca con error, el panel
+muestra «Trabajo atascado en Windows». Lo revisa cada minuto, solo en las impresoras que
+usó el POS, y no bloquea los trabajos siguientes.
+
+Con una impresora cuyo puerto apunta a otro equipo, el puente espera hasta 6 segundos a
+que el trabajo salga de la cola. Si Windows lo marca con problemas, lo cancela y devuelve
+al POS el error `printer_undelivered`, así reintentar no duplica. Si solo está tardando,
+lo da por enviado y queda a cargo de la revisión anterior. Las impresoras con otro puerto
+no cambian. «Diagnosticar» revisa la instalación, el estado y la red hacia el otro equipo;
+el permiso para imprimir solo se confirma con «Probar texto».
 
 ## 7. Lista de chequeo con hardware real
 

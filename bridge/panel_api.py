@@ -15,6 +15,7 @@ from bridge.backends import Target
 from bridge.config import TEST_DELAYS, TEST_RESPONSES, UPDATE_MODES
 from bridge.errors import BridgeError
 from bridge.escpos import looks_like_zpl, render_escpos
+from bridge.monitor import QUEUE_TEXT, windows_state
 from bridge.samples import SAMPLES, test_ticket
 from bridge.security import (
     LoginThrottle,
@@ -177,6 +178,55 @@ def _printers_snapshot(ctx, summary: dict) -> list[dict]:
          "last_ts": info["last_ts"], "last_message": info["last_message"]}
         for label, info in sorted(summary["by_target"].items())
     ]
+
+
+def _with_hints(printers: list[dict], windows: list[dict]) -> list[dict]:
+    """Explica por qué el puente no encuentra una impresora que usó el POS."""
+    names = [w.get("Name", "") for w in windows]
+    rows = []
+    for printer in printers:
+        if printer["status_text"] == QUEUE_TEXT["not_found"][1]:
+            label = printer["label"]
+            wanted = label.strip().casefold()
+            similar = next((n for n in names if n.rsplit("\\", 1)[-1].strip().casefold() == wanted), None)
+            hint = (f"En Windows está como «{similar}» y debe llamarse exactamente «{label}»." if similar
+                    else "Este equipo no tiene esa impresora, aunque esté instalada en otro.")
+            printer = {**printer, "hint": hint}
+        rows.append(printer)
+    return rows
+
+
+def _diagnose_printer(real, name: str, connect=socket.create_connection) -> list[dict]:
+    """Revisa paso a paso una impresora ya instalada. `ok` es None si solo se confirma imprimiendo."""
+    try:
+        windows = real.list_printers()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("No se pudieron listar las impresoras: %s", exc)
+        windows = []
+    # Solo se tocan impresoras instaladas: abrir una ruta UNC cualquiera conectaría por SMB a ese equipo.
+    printer = next((w for w in windows if w.get("Name", "").casefold() == name.strip().casefold()), None)
+    if printer is None:
+        hint = _with_hints([{"label": name, "status_text": QUEUE_TEXT["not_found"][1]}], windows)[0]["hint"]
+        return [{"ok": False, "title": "Instalada en este equipo", "detail": hint}]
+    checks = [{"ok": True, "title": "Instalada en este equipo", "detail": f"Driver: {printer.get('DriverName') or 'sin informar'}."}]
+    if printer["Name"].startswith("\\\\") or printer.get("Type") == "Connection":
+        checks.append({"ok": False, "title": "Tipo de instalación",
+                       "detail": "Es una conexión compartida, que pertenece a un usuario de Windows. Créala con un puerto local."})
+    state, text = windows_state(real, printer["Name"])
+    checks.append({"ok": state == "ok", "title": "Estado en Windows", "detail": f"{text}."})
+    port = printer.get("PortName") or ""
+    if port.startswith("\\\\"):
+        host = port[2:].split("\\", 1)[0]
+        try:
+            with connect((host, 445), timeout=2):
+                pass
+            checks.append({"ok": True, "title": "Red hacia el otro equipo", "detail": f"{host} responde."})
+        except OSError:
+            checks.append({"ok": False, "title": "Red hacia el otro equipo",
+                           "detail": f"{host} no responde. Revisa que esté encendido, en la misma red y con «Compartir archivos e impresoras» activo."})
+        checks.append({"ok": None, "title": "Permiso para imprimir",
+                       "detail": "Solo se confirma imprimiendo: pulsa «Probar texto» y revisa que salga el ticket."})
+    return checks
 
 
 def _attention(ctx, printers: list[dict]) -> list[dict]:
@@ -365,8 +415,15 @@ def create_panel_api_blueprint() -> Blueprint:
         except Exception as exc:  # noqa: BLE001
             logger.error("No se pudieron listar las impresoras: %s", exc)
             windows = []
-        return jsonify({"printers": _printers_snapshot(ctx, summary), "windows": windows,
+        return jsonify({"printers": _with_hints(_printers_snapshot(ctx, summary), windows), "windows": windows,
                         "virtual": ctx.virtual.list_printers() if ctx.settings.test_mode else []})
+
+    @bp.post("/printers/diagnose")
+    def printer_diagnose():
+        name = (request.get_json(silent=True) or {}).get("printer_name")
+        if not isinstance(name, str) or not name.strip():
+            raise BridgeError("Falta el nombre de la impresora.", 400)
+        return jsonify({"printer": name, "checks": _diagnose_printer(_ctx().real, name)})
 
     @bp.post("/printers/test")
     def printer_test():
@@ -382,8 +439,8 @@ def create_panel_api_blueprint() -> Blueprint:
                     return jsonify({"result": True, "message": f"{target.label} responde."})
                 except OSError as exc:
                     return jsonify({"result": False, "message": f"{target.label} no responde: {exc}"})
-            state = ctx.real.queue_status(target.printer_name)
-            return jsonify({"result": state == "ok", "message": f"Estado en Windows: {state}"})
+            state, text = windows_state(ctx.real, target.printer_name)
+            return jsonify({"result": state == "ok", "message": f"{target.label}: {text}"})
         if kind == "cashbox":
             return jsonify(ctx.service.cashbox(_target_payload(target), None, request.remote_addr, source="panel"))
         if kind == "label":
