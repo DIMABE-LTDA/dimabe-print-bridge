@@ -156,6 +156,11 @@ table{width:100%;border-collapse:collapse}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
 .kv dt{color:var(--ink-3)}.kv dd{margin:0;overflow-wrap:anywhere}
 .steps{margin:0;padding-left:18px;color:var(--ink-2);display:flex;flex-direction:column;gap:4px}
+.help-block summary{margin:0;cursor:pointer;font-weight:700}
+.help-block[open] summary{margin-bottom:10px}
+.help-block .intro{margin:0;color:var(--ink-2);max-width:90ch}
+.help-block .h5{margin:16px 0 8px;font-size:13px}
+.help-block td{vertical-align:top}
 
 .hours{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;align-items:end;height:96px;padding-top:6px}
 .hours .bar{display:flex;flex-direction:column-reverse;height:100%;justify-content:flex-start}

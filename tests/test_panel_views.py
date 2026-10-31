@@ -40,6 +40,13 @@ def test_pages_render(local, ctx, path, title):
     assert not EXTERNAL.search(html)
 
 
+def test_printers_page_explains_printer_on_another_machine(local):
+    html = local.get("/panel/impresoras", headers=HOST).get_data(as_text=True)
+    assert "La impresora está conectada a otro equipo" in html
+    assert r"\\NOMBRE-DEL-EQUIPO\NOMBRE-COMPARTIDO" in html
+    assert "Casos frecuentes" in html
+
+
 def test_root_redirects_to_panel(local):
     r = local.get("/", headers=HOST)
     assert r.status_code == 302 and r.headers["Location"].endswith("/panel")
