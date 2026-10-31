@@ -90,7 +90,12 @@ otro equipo».
 No uses la conexión normal a una impresora compartida: queda con el nombre
 `\\EQUIPO\COMPARTIDA` y pertenece al usuario de Windows. El puente corre como servicio con
 la cuenta del sistema, así que tampoco usa las credenciales guardadas del usuario. Por eso
-la prueba válida es «Probar texto» en el panel, no la página de prueba de Windows.
+la prueba válida es «Probar texto» en el panel, no la página de prueba de Windows, y hay
+que confirmar que el ticket salga en papel: Windows puede aceptar el trabajo sin entregarlo.
+
+Si un trabajo lleva más de 2 minutos en la cola o Windows lo marca con error, el panel
+muestra «Trabajo atascado en Windows». Lo revisa cada minuto, solo en las impresoras que
+usó el POS, y no bloquea los trabajos siguientes.
 
 ## 7. Lista de chequeo con hardware real
 

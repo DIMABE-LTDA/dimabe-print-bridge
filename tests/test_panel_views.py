@@ -45,6 +45,7 @@ def test_printers_page_explains_printer_on_another_machine(local):
     assert "La impresora está conectada a otro equipo" in html
     assert r"\\NOMBRE-DEL-EQUIPO\NOMBRE-COMPARTIDO" in html
     assert "Casos frecuentes" in html
+    assert "Trabajo atascado en Windows" in html
 
 
 def test_root_redirects_to_panel(local):

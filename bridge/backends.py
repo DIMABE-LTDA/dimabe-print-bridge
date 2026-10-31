@@ -6,6 +6,7 @@ import logging
 import socket
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Literal, Protocol
 
 from bridge.errors import BridgeError
@@ -26,6 +27,10 @@ PRINTER_STATUS_PAPER_OUT = 0x10
 PRINTER_STATUS_OFFLINE = 0x80
 PRINTER_ATTRIBUTE_WORK_OFFLINE = 0x400
 STATUS_TEXT = {"paused": "pausada", "offline": "sin conexión", "error": "con error"}
+JOB_STATUS_PAUSED = 0x1
+JOB_STUCK_FLAGS = 0x2 | 0x20 | 0x40 | 0x200 | 0x400  # error, sin conexión, sin papel, bloqueado, requiere atención
+JOBS_TO_REVIEW = 50
+STUCK_AFTER_S = 120
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,19 @@ def image_pages(image_size: tuple[int, int], printable: tuple[int, int]) -> list
     return pages
 
 
+def job_is_stuck(job: dict) -> bool:
+    status = job.get("Status", 0)
+    if status & JOB_STUCK_FLAGS:
+        return True
+    submitted = job.get("Submitted")
+    if status & JOB_STATUS_PAUSED or submitted is None:
+        return False
+    # Windows informa la hora de envío en UTC.
+    if submitted.tzinfo is None:
+        submitted = submitted.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - submitted).total_seconds() > STUCK_AFTER_S
+
+
 class WindowsBackend:
     def __init__(self, win32print=None, win32ui=None, connect=socket.create_connection):
         if win32print is None:
@@ -92,10 +110,28 @@ class WindowsBackend:
     def _assert_ready(self, printer_name: str) -> None:
         state = self.queue_status(printer_name)
         if state == "not_found":
-            raise BridgeError(f"Printer '{printer_name}' was not found in Windows.", 500)
+            raise BridgeError(
+                f"La impresora '{printer_name}' no existe en este equipo ({socket.gethostname()}). "
+                "Debe estar instalada en su Windows con ese nombre exacto. "
+                "Ayuda en el panel del puente › Impresoras.", 500, code="printer_not_found")
         if state != "ok":
             raise BridgeError(f"La impresora '{printer_name}' está {STATUS_TEXT[state]} en Windows.", 500,
                               code="printer_offline")
+
+    def stuck_jobs(self, printer_name: str) -> int:
+        """Trabajos que Windows aceptó y no logra entregar, aunque la impresora figure lista."""
+        try:
+            handle = self.win32print.OpenPrinter(printer_name)
+        except Exception:  # pywintypes.error
+            return 0
+        try:
+            jobs = self.win32print.EnumJobs(handle, 0, JOBS_TO_REVIEW, 1)
+        except Exception:  # noqa: BLE001 - revisar la cola nunca debe impedir imprimir
+            logger.warning("No se pudo revisar la cola de '%s'", printer_name)
+            return 0
+        finally:
+            self.win32print.ClosePrinter(handle)
+        return sum(1 for job in jobs if job_is_stuck(job))
 
     def list_printers(self) -> list[dict]:
         flags = self.win32print.PRINTER_ENUM_LOCAL | self.win32print.PRINTER_ENUM_CONNECTIONS

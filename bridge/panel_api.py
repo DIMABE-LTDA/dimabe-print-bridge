@@ -15,6 +15,7 @@ from bridge.backends import Target
 from bridge.config import TEST_DELAYS, TEST_RESPONSES, UPDATE_MODES
 from bridge.errors import BridgeError
 from bridge.escpos import looks_like_zpl, render_escpos
+from bridge.monitor import QUEUE_TEXT, windows_state
 from bridge.samples import SAMPLES, test_ticket
 from bridge.security import (
     LoginThrottle,
@@ -177,6 +178,22 @@ def _printers_snapshot(ctx, summary: dict) -> list[dict]:
          "last_ts": info["last_ts"], "last_message": info["last_message"]}
         for label, info in sorted(summary["by_target"].items())
     ]
+
+
+def _with_hints(printers: list[dict], windows: list[dict]) -> list[dict]:
+    """Explica por qué el puente no encuentra una impresora que usó el POS."""
+    names = [w.get("Name", "") for w in windows]
+    rows = []
+    for printer in printers:
+        if printer["status_text"] == QUEUE_TEXT["not_found"][1]:
+            label = printer["label"]
+            wanted = label.strip().casefold()
+            similar = next((n for n in names if n.rsplit("\\", 1)[-1].strip().casefold() == wanted), None)
+            hint = (f"En Windows está como «{similar}» y debe llamarse exactamente «{label}»." if similar
+                    else "Este equipo no tiene esa impresora, aunque esté instalada en otro.")
+            printer = {**printer, "hint": hint}
+        rows.append(printer)
+    return rows
 
 
 def _attention(ctx, printers: list[dict]) -> list[dict]:
@@ -365,7 +382,7 @@ def create_panel_api_blueprint() -> Blueprint:
         except Exception as exc:  # noqa: BLE001
             logger.error("No se pudieron listar las impresoras: %s", exc)
             windows = []
-        return jsonify({"printers": _printers_snapshot(ctx, summary), "windows": windows,
+        return jsonify({"printers": _with_hints(_printers_snapshot(ctx, summary), windows), "windows": windows,
                         "virtual": ctx.virtual.list_printers() if ctx.settings.test_mode else []})
 
     @bp.post("/printers/test")
@@ -382,8 +399,8 @@ def create_panel_api_blueprint() -> Blueprint:
                     return jsonify({"result": True, "message": f"{target.label} responde."})
                 except OSError as exc:
                     return jsonify({"result": False, "message": f"{target.label} no responde: {exc}"})
-            state = ctx.real.queue_status(target.printer_name)
-            return jsonify({"result": state == "ok", "message": f"Estado en Windows: {state}"})
+            state, text = windows_state(ctx.real, target.printer_name)
+            return jsonify({"result": state == "ok", "message": f"{target.label}: {text}"})
         if kind == "cashbox":
             return jsonify(ctx.service.cashbox(_target_payload(target), None, request.remote_addr, source="panel"))
         if kind == "label":

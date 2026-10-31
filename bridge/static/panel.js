@@ -251,9 +251,10 @@
         if (!(await confirmDialog("¿Probar la impresora?", `${paper} en ${target.printer_name || target.ip_address}.`, "Probar"))) return;
       }
       const data = await busy(button, () => api("/panel/api/printers/test", { method: "POST", body: { target, kind } }));
-      if (data) toast(data.message);
+      if (data) toast(kind === "text" ? `${data.message} Revisa que el ticket haya salido en papel.` : data.message);
       return data;
     };
+    const openHelp = () => { $("#ayuda-otro-equipo").open = true; };
     const load = async () => {
       let data;
       try { data = await api("/panel/api/printers"); } catch (err) { toast(err.message, "error"); return; }
@@ -277,7 +278,8 @@
         const [ip, port] = p.label.split(":");
         const target = p.kind === "ip" ? { ip_address: ip, ip_port: Number(port) } : { printer_name: p.label };
         rows.push(h("tr", {},
-          h("td", {}, h("b", {}, p.label), h("div", { class: "muted" }, p.kind === "ip" ? "Impresora de red usada por el POS" : "Usada por el POS")),
+          h("td", {}, h("b", {}, p.label), h("div", { class: "muted" }, p.kind === "ip" ? "Impresora de red usada por el POS" : "Usada por el POS"),
+            p.hint ? h("div", { class: "err" }, p.hint, " ", h("a", { href: "#ayuda-otro-equipo", onclick: openHelp }, "Ver cómo resolverlo")) : null),
           h("td", {}, p.kind === "ip" ? "Red" : "USB"), h("td", { class: "mono" }, p.label),
           h("td", {}, printerStatus(p)), h("td", { class: "r num" }, nf.format(p.today_ok)), h("td", { class: "r num" }, nf.format(p.today_error)),
           h("td", { class: "r" }, h("div", { class: "inline end" },
