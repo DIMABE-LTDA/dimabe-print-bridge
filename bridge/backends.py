@@ -31,6 +31,8 @@ JOB_STATUS_PAUSED = 0x1
 JOB_STUCK_FLAGS = 0x2 | 0x20 | 0x40 | 0x200 | 0x400  # error, sin conexión, sin papel, bloqueado, requiere atención
 JOBS_TO_REVIEW = 50
 STUCK_AFTER_S = 120
+DELIVERY_WAIT_S = 6
+DELIVERY_POLL_S = 0.5
 
 
 @dataclass(frozen=True)
@@ -133,6 +135,59 @@ class WindowsBackend:
             self.win32print.ClosePrinter(handle)
         return sum(1 for job in jobs if job_is_stuck(job))
 
+    def _sends_to_other_machine(self, printer_name: str) -> bool:
+        if printer_name.startswith("\\\\"):
+            return True
+        try:
+            handle = self.win32print.OpenPrinter(printer_name)
+            try:
+                port = self.win32print.GetPrinter(handle, 2).get("pPortName") or ""
+            finally:
+                self.win32print.ClosePrinter(handle)
+        except Exception:  # noqa: BLE001 - revisar el puerto nunca debe impedir imprimir
+            return False
+        return port.startswith("\\\\")
+
+    def _confirm_delivery(self, printer_name: str, job_name: str) -> None:
+        """Con una impresora de otro equipo, Windows acepta el trabajo aunque no pueda entregarlo.
+
+        Si Windows lo marca con problemas se cancela y se avisa al POS: así no sale más
+        tarde y reintentar no duplica. Si solo está tardando, sigue y lo vigila el monitor.
+        """
+        deadline = time.monotonic() + DELIVERY_WAIT_S
+        while True:
+            try:
+                handle = self.win32print.OpenPrinter(printer_name)
+                try:
+                    jobs = [j for j in self.win32print.EnumJobs(handle, 0, JOBS_TO_REVIEW, 1)
+                            if j.get("pDocument") == job_name]
+                    failed = [j for j in jobs if j.get("Status", 0) & JOB_STUCK_FLAGS]
+                    cancelled = failed and self._cancel_jobs(handle, failed)
+                finally:
+                    self.win32print.ClosePrinter(handle)
+            except Exception:  # noqa: BLE001 - la revisión nunca debe convertir un envío en error
+                logger.warning("No se pudo confirmar la entrega en '%s'", printer_name)
+                return
+            if failed:
+                outcome = ("Se canceló y no saldrá después." if cancelled
+                           else "No se pudo cancelar y podría salir más tarde.")
+                raise BridgeError(
+                    f"Windows no pudo entregar el trabajo a '{printer_name}'. {outcome} "
+                    "Revisa que el equipo que tiene la impresora esté encendido y permita imprimir "
+                    "al puente. Ayuda en el panel del puente › Impresoras.", 500, code="printer_undelivered")
+            if not jobs or time.monotonic() >= deadline:
+                return
+            time.sleep(DELIVERY_POLL_S)
+
+    def _cancel_jobs(self, handle, jobs: list[dict]) -> bool:
+        try:
+            for job in jobs:
+                self.win32print.SetJob(handle, job["JobId"], 0, None, self.win32print.JOB_CONTROL_DELETE)
+        except Exception:  # noqa: BLE001
+            logger.warning("No se pudo cancelar un trabajo sin entregar")
+            return False
+        return True
+
     def list_printers(self) -> list[dict]:
         flags = self.win32print.PRINTER_ENUM_LOCAL | self.win32print.PRINTER_ENUM_CONNECTIONS
         printers = self.win32print.EnumPrinters(flags, None, 2)
@@ -157,6 +212,7 @@ class WindowsBackend:
             self._send_network(target, data, ask_status=ask_status)
             return
         self._assert_ready(target.printer_name)
+        confirm = self._sends_to_other_machine(target.printer_name)
         wp = self.win32print
         handle = wp.OpenPrinter(target.printer_name)
         doc_started = False
@@ -182,6 +238,8 @@ class WindowsBackend:
             if doc_started:
                 wp.EndDocPrinter(handle)
             wp.ClosePrinter(handle)
+        if confirm:
+            self._confirm_delivery(target.printer_name, job_name)
 
     def _ask(self, sock, command: bytes) -> int | None:
         sock.sendall(command)
@@ -234,6 +292,7 @@ class WindowsBackend:
                 "Image-based printing requires a USB target (printer_name). "
                 "Use raw_hex or raw_base64 for network printers.", 400)
         self._assert_ready(target.printer_name)
+        confirm = self._sends_to_other_machine(target.printer_name)
         from PIL import Image, ImageWin  # noqa: PLC0415
 
         win32ui = self._win32ui
@@ -266,3 +325,5 @@ class WindowsBackend:
             raise BridgeError(f"No se pudo imprimir la imagen en '{target.printer_name}': {exc}", 500) from exc
         finally:
             dc.DeleteDC()
+        if confirm:
+            self._confirm_delivery(target.printer_name, job_name)

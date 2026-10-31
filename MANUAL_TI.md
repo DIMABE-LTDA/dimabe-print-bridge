@@ -97,6 +97,13 @@ Si un trabajo lleva más de 2 minutos en la cola o Windows lo marca con error, e
 muestra «Trabajo atascado en Windows». Lo revisa cada minuto, solo en las impresoras que
 usó el POS, y no bloquea los trabajos siguientes.
 
+Con una impresora cuyo puerto apunta a otro equipo, el puente espera hasta 6 segundos a
+que el trabajo salga de la cola. Si Windows lo marca con problemas, lo cancela y devuelve
+al POS el error `printer_undelivered`, así reintentar no duplica. Si solo está tardando,
+lo da por enviado y queda a cargo de la revisión anterior. Las impresoras con otro puerto
+no cambian. «Diagnosticar» revisa la instalación, el estado y la red hacia el otro equipo;
+el permiso para imprimir solo se confirma con «Probar texto».
+
 ## 7. Lista de chequeo con hardware real
 
 Antes de dar por buena una caja (o una versión nueva), en una caja con BIXOLON y Zebra:

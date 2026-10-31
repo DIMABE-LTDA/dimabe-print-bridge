@@ -255,6 +255,19 @@
       return data;
     };
     const openHelp = () => { $("#ayuda-otro-equipo").open = true; };
+    const CHECK_PILL = { true: ["ok", "Bien"], false: ["err", "Revisar"], null: ["warn", "Por confirmar"] };
+    const diagnose = async (button, name) => {
+      const data = await busy(button, () => api("/panel/api/printers/diagnose", { method: "POST", body: { printer_name: name } }));
+      if (!data) return;
+      const box = $("#diagnosis");
+      $("#diagnosis-title").textContent = `Diagnóstico de ${data.printer}`;
+      $("#diagnosis-body").replaceChildren(...data.checks.map((c) => {
+        const [pill, text] = CHECK_PILL[c.ok];
+        return h("li", {}, h("span", { class: "pill " + pill }, text), h("div", {}, h("b", {}, c.title), h("div", { class: "muted" }, c.detail)));
+      }));
+      box.hidden = false;
+      box.scrollIntoView({ block: "nearest" });
+    };
     const load = async () => {
       let data;
       try { data = await api("/panel/api/printers"); } catch (err) { toast(err.message, "error"); return; }
@@ -270,7 +283,7 @@
           h("td", {}, p ? printerStatus(p) : h("span", { class: "pill off" }, "Sin uso hoy")),
           h("td", { class: "r num" }, p ? nf.format(p.today_ok) : "0"), h("td", { class: "r num" }, p ? nf.format(p.today_error) : "0"),
           h("td", { class: "r" }, h("div", { class: "inline end" },
-            h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "connection") }, "Estado"),
+            h("button", { class: "btn", type: "button", onclick: (e) => diagnose(e.currentTarget, w.Name) }, "Diagnosticar"),
             h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "text") }, "Probar texto"),
             h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "cashbox") }, "Abrir cajón")))));
       }
@@ -283,7 +296,9 @@
           h("td", {}, p.kind === "ip" ? "Red" : "USB"), h("td", { class: "mono" }, p.label),
           h("td", {}, printerStatus(p)), h("td", { class: "r num" }, nf.format(p.today_ok)), h("td", { class: "r num" }, nf.format(p.today_error)),
           h("td", { class: "r" }, h("div", { class: "inline end" },
-            h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "connection") }, "Probar conexión"),
+            p.kind === "ip"
+              ? h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "connection") }, "Probar conexión")
+              : h("button", { class: "btn", type: "button", onclick: (e) => diagnose(e.currentTarget, p.label) }, "Diagnosticar"),
             h("button", { class: "btn", type: "button", onclick: (e) => testPrinter(e.currentTarget, target, "text") }, "Probar texto")))));
       }
       $("#printers-body").replaceChildren(...(rows.length ? rows : [h("tr", {}, h("td", { colspan: 7, class: "empty" }, "Windows no informa impresoras y el POS aún no ha usado ninguna de red."))]));
@@ -296,6 +311,7 @@
       $("#ip-test-result").textContent = data ? data.message : "";
     });
     $('[data-action="refresh"]').addEventListener("click", load);
+    $("#diagnosis-help").addEventListener("click", openHelp);
     load();
   }
 

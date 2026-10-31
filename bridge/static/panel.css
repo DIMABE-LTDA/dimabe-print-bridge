@@ -161,6 +161,9 @@ table{width:100%;border-collapse:collapse}
 .help-block .intro{margin:0;color:var(--ink-2);max-width:90ch}
 .help-block .h5{margin:16px 0 8px;font-size:13px}
 .help-block td{vertical-align:top}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.checks li{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:start}
+.checks .pill{justify-self:start}
 
 .hours{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;align-items:end;height:96px;padding-top:6px}
 .hours .bar{display:flex;flex-direction:column-reverse;height:100%;justify-content:flex-start}
